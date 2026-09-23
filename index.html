@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carnet — suivre et projeter son patrimoine, gratuitement</title>
+<meta name="description" content="Simulateurs de projection patrimoniale, de crédit et de rendement locatif, et un tableau de bord gratuit pour suivre son patrimoine net. Sans connexion bancaire.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,300;6..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="bandeau">
+  <div class="enveloppe">
+    <a class="marque" href="/">Car<span>net</span></a>
+    <nav>
+      <a href="#simulateurs">Simulateurs</a>
+      <a href="#tableau-de-bord">Tableau de bord</a>
+      <a href="auth.html">Se connecter</a>
+      <a class="bouton" href="auth.html?mode=inscription">Créer un compte</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="heros enveloppe">
+    <h1>Votre patrimoine, sans abonnement ni connexion bancaire</h1>
+    <p class="accroche">Trois briques construisent un patrimoine : l'épargne qui capitalise, le crédit qui s'amortit, l'immobilier déjà détenu. Bougez les curseurs pour voir où vous arrivez.</p>
+
+    <div class="simulateur">
+      <div>
+        <div class="panneau">
+          <h3>Votre épargne</h3>
+          <div class="curseur">
+            <div class="ligne"><span>Capital déjà investi</span><span class="valeur" id="vCapital"></span></div>
+            <input type="range" id="capital" min="0" max="500000" step="1000" value="30000">
+          </div>
+          <div class="curseur">
+            <div class="ligne"><span>Épargne mensuelle</span><span class="valeur" id="vEpargne"></span></div>
+            <input type="range" id="epargne" min="0" max="6000" step="50" value="1000">
+          </div>
+          <div class="curseur">
+            <div class="ligne"><span>Rendement annuel visé</span><span class="valeur" id="vRendement"></span></div>
+            <input type="range" id="rendement" min="0" max="12" step="0.5" value="6">
+          </div>
+          <div class="curseur">
+            <div class="ligne"><span>Horizon</span><span class="valeur" id="vDuree"></span></div>
+            <input type="range" id="duree" min="1" max="40" step="1" value="15">
+          </div>
+        </div>
+
+        <div class="panneau">
+          <h3>Votre immobilier</h3>
+          <div class="curseur">
+            <div class="ligne"><span>Équité nette actuelle</span><span class="valeur" id="vEquite"></span></div>
+            <input type="range" id="equite" min="0" max="800000" step="5000" value="80000">
+          </div>
+          <div class="curseur">
+            <div class="ligne"><span>Capital de crédit amorti par mois</span><span class="valeur" id="vAmorti"></span></div>
+            <input type="range" id="amorti" min="0" max="4000" step="25" value="600">
+          </div>
+          <small>La part capital de vos mensualités, hors intérêts et assurance. Elle se lit sur votre tableau d'amortissement.</small>
+        </div>
+      </div>
+
+      <div>
+        <div class="panneau resultat">
+          <span class="etiquette">Patrimoine net projeté dans <span id="etiquetteAnnees">15 ans</span></span>
+          <div class="chiffre" id="total">—</div>
+          <div><span class="delta" id="construit"></span> construits à partir d'aujourd'hui, dont <span id="genere"></span> de rendement</div>
+          <div class="cadre-graphique" style="margin-top:1.25rem"><canvas id="graphique"></canvas></div>
+          <div class="legende">
+            <div><span class="pastille" style="background:#a98235"></span> Immobilier net <b id="lgImmo"></b></div>
+            <div><span class="pastille" style="background:#3d6070"></span> Crédit amorti <b id="lgAmorti"></b></div>
+            <div><span class="pastille" style="background:#0e6b4c"></span> Épargne capitalisée <b id="lgFin"></b></div>
+          </div>
+        </div>
+        <p style="margin-top:1rem"><small>Projection déterministe : les marchés ne montent pas en ligne droite. Un rendement constant lisse une réalité qui ne l'est pas. Ceci est un outil de simulation, pas un conseil en investissement.</small></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="bloc enveloppe" id="simulateurs">
+    <h2>Les autres calculs qui reviennent</h2>
+    <div class="onglets" role="tablist">
+      <button role="tab" aria-selected="true" data-panneau="pCredit">Crédit immobilier</button>
+      <button role="tab" aria-selected="false" data-panneau="pLocatif">Rendement locatif</button>
+    </div>
+
+    <div id="pCredit" class="simulateur">
+      <div class="panneau">
+        <h3>Capacité d'emprunt</h3>
+        <label class="champ"><span>Revenus nets du foyer, par mois</span><input type="number" id="cRevenus" value="5000"></label>
+        <label class="champ"><span>Mensualités de crédit en cours</span><input type="number" id="cCharges" value="0"></label>
+        <div class="duo">
+          <label class="champ"><span>Taux annuel (%)</span><input type="number" id="cTaux" value="3.4" step="0.05"></label>
+          <label class="champ"><span>Durée (ans)</span><input type="number" id="cDuree" value="25"></label>
+        </div>
+        <label class="champ"><span>Apport</span><input type="number" id="cApport" value="30000"></label>
+        <label class="champ"><span>Taux d'endettement retenu (%)</span><input type="number" id="cEndettement" value="35" step="1"></label>
+      </div>
+      <div>
+        <div class="panneau resultat">
+          <span class="etiquette">Budget d'achat accessible</span>
+          <div class="chiffre petit" id="cBudget">—</div>
+          <p><span id="cCapital"></span> empruntés à <span id="cMensualite"></span> par mois, plus votre apport. Coût total du crédit : <span id="cCout"></span>.</p>
+          <div class="cadre-graphique" style="height:240px"><canvas id="graphiqueCredit"></canvas></div>
+          <small>Part capital et part intérêts de chaque mensualité, sur toute la durée du prêt.</small>
+        </div>
+      </div>
+    </div>
+
+    <div id="pLocatif" class="simulateur" hidden>
+      <div class="panneau">
+        <h3>Rendement d'un bien locatif</h3>
+        <label class="champ"><span>Prix du bien</span><input type="number" id="lPrix" value="200000"></label>
+        <div class="duo">
+          <label class="champ"><span>Frais de notaire</span><input type="number" id="lFrais" value="16000"></label>
+          <label class="champ"><span>Travaux</span><input type="number" id="lTravaux" value="0"></label>
+        </div>
+        <label class="champ"><span>Loyer hors charges, par mois</span><input type="number" id="lLoyer" value="850"></label>
+        <div class="duo">
+          <label class="champ"><span>Charges annuelles</span><input type="number" id="lCharges" value="1200"></label>
+          <label class="champ"><span>Taxe foncière</span><input type="number" id="lTaxe" value="1100"></label>
+        </div>
+        <label class="champ"><span>Vacance locative (%)</span><input type="number" id="lVacance" value="4"></label>
+      </div>
+      <div class="panneau resultat">
+        <span class="etiquette">Rendement net de charges</span>
+        <div class="chiffre petit" id="lNet">—</div>
+        <p>Rendement brut <span id="lBrut"></span> sur <span id="lInvesti"></span> investis. Le bien dégage <span id="lCashflow"></span> par mois avant crédit et avant impôt.</p>
+        <div class="avis">Le rendement net de charges ignore la fiscalité, qui dépend de votre régime (micro-foncier, réel, LMNP) et de votre tranche. C'est l'étape suivante, pas celle-ci.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="bloc enveloppe" id="tableau-de-bord">
+    <h2>Le tableau de bord</h2>
+    <p>Les simulateurs répondent à « et si ». Le tableau de bord répond à « où j'en suis ». Il demande un compte, parce qu'il faut bien stocker vos chiffres quelque part.</p>
+    <div class="grille-fiches" style="margin-top:1.5rem">
+      <div class="panneau">
+        <h3>Vos biens et vos prêts</h3>
+        <p style="margin:0"><small>Valeur du bien, capital restant dû, équité nette. Le capital restant se met à jour tout seul entre deux relevés de banque, à partir du taux et de la durée.</small></p>
+      </div>
+      <div class="panneau">
+        <h3>Vos enveloppes</h3>
+        <p style="margin:0"><small>PEA, assurance-vie, CTO, PER, livrets. Vos lignes d'ETF sont valorisées automatiquement au dernier cours connu, une fois par jour.</small></p>
+      </div>
+      <div class="panneau">
+        <h3>Votre historique</h3>
+        <p style="margin:0"><small>Un point de mesure quand vous le voulez. La courbe qui en sort est la seule chose qui distingue un patrimoine suivi d'un patrimoine estimé.</small></p>
+      </div>
+    </div>
+    <div class="pile" style="margin-top:1.75rem">
+      <a class="bouton" href="auth.html?mode=inscription">Créer un compte</a>
+      <a class="bouton discret" href="auth.html">J'ai déjà un compte</a>
+    </div>
+    <p style="margin-top:1.25rem"><small>Gratuit, sans publicité et sans revente de données. Aucune connexion à vos comptes bancaires : vous saisissez ce que vous voulez suivre. Export et suppression de votre compte en un clic.</small></p>
+  </section>
+</main>
+
+<footer class="pied">
+  <div class="enveloppe entre">
+    <span>Carnet — outil de simulation. Ni conseil en investissement, ni conseil fiscal.</span>
+    <span><a href="legal.html">Mentions légales et confidentialité</a></span>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script type="module" src="simulateurs.js"></script>
+</body>
+</html>

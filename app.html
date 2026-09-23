@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mon patrimoine — Carnet</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,300;6..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="bandeau">
+  <div class="enveloppe">
+    <a class="marque" href="index.html">Car<span>net</span></a>
+    <nav>
+      <span id="courriel" style="color:var(--encre-2);font-size:0.88rem"></span>
+      <button class="bouton discret mini" id="deconnexion">Se déconnecter</button>
+    </nav>
+  </div>
+</header>
+
+<main class="enveloppe">
+  <div class="onglets" role="tablist" style="margin-top:1.25rem">
+    <button role="tab" aria-selected="true" data-panneau="pSynthese">Synthèse</button>
+    <button role="tab" aria-selected="false" data-panneau="pImmo">Immobilier</button>
+    <button role="tab" aria-selected="false" data-panneau="pPrets">Prêts</button>
+    <button role="tab" aria-selected="false" data-panneau="pComptes">Enveloppes</button>
+    <button role="tab" aria-selected="false" data-panneau="pHisto">Historique</button>
+    <button role="tab" aria-selected="false" data-panneau="pCompte">Mon compte</button>
+  </div>
+
+  <!-- SYNTHÈSE -->
+  <section id="pSynthese">
+    <div class="panneau resultat">
+      <span class="etiquette">Patrimoine net</span>
+      <div class="chiffre" id="sNet">—</div>
+      <div id="sEvolution"></div>
+    </div>
+
+    <div class="grille-fiches" style="margin-top:1rem">
+      <div class="panneau fiche"><div class="titre">Immobilier net de dette</div><div class="montant" id="sImmo">—</div><small id="sImmoDetail"></small></div>
+      <div class="panneau fiche"><div class="titre">Placements financiers</div><div class="montant" id="sFin">—</div><small id="sFinDetail"></small></div>
+      <div class="panneau fiche"><div class="titre">Capital restant dû</div><div class="montant" id="sDette">—</div><small id="sDetteDetail"></small></div>
+      <div class="panneau fiche"><div class="titre">Amorti chaque mois</div><div class="montant" id="sAmorti">—</div><small>part capital de vos mensualités</small></div>
+    </div>
+
+    <div class="panneau" style="margin-top:1rem">
+      <h3>Où en est votre patrimoine</h3>
+      <div class="cadre-graphique" style="height:260px"><canvas id="gRepartition"></canvas></div>
+    </div>
+
+    <div class="panneau" style="margin-top:1rem">
+      <div class="entre" style="margin-bottom:0.9rem">
+        <h3 style="margin:0">Projection à partir de vos chiffres</h3>
+      </div>
+      <div class="duo">
+        <label class="champ"><span>Épargne mensuelle (€)</span><input type="number" id="pjEpargne" value="500"></label>
+        <label class="champ"><span>Rendement annuel (%)</span><input type="number" id="pjRendement" value="6" step="0.5"></label>
+      </div>
+      <div class="curseur">
+        <div class="ligne"><span>Horizon</span><span class="valeur" id="pjVDuree">15 ans</span></div>
+        <input type="range" id="pjDuree" min="1" max="40" value="15">
+      </div>
+      <p style="margin:0.5rem 0 1rem">Patrimoine net projeté : <b id="pjTotal">—</b></p>
+      <div class="cadre-graphique" style="height:260px"><canvas id="gProjection"></canvas></div>
+      <p style="margin-top:0.9rem"><small>Point de départ : votre équité immobilière et vos placements réels. Le capital amorti vient de vos prêts, pas d'une estimation.</small></p>
+    </div>
+  </section>
+
+  <!-- IMMOBILIER -->
+  <section id="pImmo" hidden>
+    <div class="entre" style="margin:0.5rem 0 1rem">
+      <h2 style="margin:0">Biens</h2>
+      <button class="bouton" data-ajout="biens">Ajouter un bien</button>
+    </div>
+    <div class="panneau defilant" id="tBiens"></div>
+  </section>
+
+  <!-- PRÊTS -->
+  <section id="pPrets" hidden>
+    <div class="entre" style="margin:0.5rem 0 1rem">
+      <h2 style="margin:0">Prêts</h2>
+      <button class="bouton" data-ajout="prets">Ajouter un prêt</button>
+    </div>
+    <div class="panneau defilant" id="tPrets"></div>
+    <p style="margin-top:1rem"><small>Le capital restant dû est recalculé automatiquement à partir de la date de votre dernier relevé bancaire. Corrigez-le une fois par an avec le chiffre exact de la banque pour éviter toute dérive.</small></p>
+  </section>
+
+  <!-- ENVELOPPES -->
+  <section id="pComptes" hidden>
+    <div class="entre" style="margin:0.5rem 0 1rem">
+      <h2 style="margin:0">Enveloppes</h2>
+      <div class="pile">
+        <button class="bouton discret" id="majCours">Actualiser les cours</button>
+        <button class="bouton" data-ajout="comptes">Ajouter une enveloppe</button>
+      </div>
+    </div>
+    <div id="listeComptes"></div>
+    <p style="margin-top:1rem"><small>Symbole au format Yahoo Finance : <code>CW8.PA</code> pour un ETF coté à Paris, <code>IWDA.AS</code> à Amsterdam, <code>AAPL</code> à New York. Sans symbole, la ligne est valorisée à son prix de revient.</small></p>
+  </section>
+
+  <!-- HISTORIQUE -->
+  <section id="pHisto" hidden>
+    <div class="entre" style="margin:0.5rem 0 1rem">
+      <h2 style="margin:0">Historique</h2>
+      <button class="bouton" id="faireUnPoint">Enregistrer un point</button>
+    </div>
+    <div class="panneau">
+      <div class="cadre-graphique" style="height:280px"><canvas id="gHisto"></canvas></div>
+    </div>
+    <div class="panneau defilant" id="tHisto" style="margin-top:1rem"></div>
+  </section>
+
+  <!-- COMPTE -->
+  <section id="pCompte" hidden>
+    <h2 style="margin:0.5rem 0 1rem">Mon compte</h2>
+    <div class="panneau">
+      <h3>Exporter mes données</h3>
+      <p>Tout ce que Carnet stocke à votre sujet, dans un fichier JSON lisible.</p>
+      <button class="bouton discret" id="exporter">Télécharger mes données</button>
+    </div>
+    <div class="panneau">
+      <h3>Supprimer mon compte</h3>
+      <p>Supprime définitivement votre compte et toutes vos données. Cette action est irréversible et ne demande pas de confirmation par e-mail.</p>
+      <button class="bouton danger" id="supprimer">Supprimer mon compte</button>
+    </div>
+  </section>
+</main>
+
+<div class="dialogue" id="dialogue">
+  <div class="panneau">
+    <h3 id="dTitre">Modifier</h3>
+    <div id="dChamps" style="margin-top:1rem"></div>
+    <div class="entre" style="margin-top:1.25rem">
+      <button class="bouton danger mini" id="dSupprimer" hidden>Supprimer</button>
+      <div class="pile" style="margin-left:auto">
+        <button class="bouton discret" id="dAnnuler">Annuler</button>
+        <button class="bouton" id="dEnregistrer">Enregistrer</button>
+      </div>
+    </div>
+    <p id="dMessage" style="margin:0.75rem 0 0"></p>
+  </div>
+</div>
+
+<footer class="pied">
+  <div class="enveloppe entre">
+    <span>Carnet — outil de simulation. Ni conseil en investissement, ni conseil fiscal.</span>
+    <span><a href="legal.html">Mentions légales et confidentialité</a></span>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
