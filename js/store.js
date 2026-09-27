@@ -91,7 +91,7 @@ function migrer(e) {
     lpp: { ...d.lpp, ...(e.lpp || {}) },
     biens: e.biens || [],
     prets: e.prets || [],
-    enveloppes: (e.enveloppes || []).map((x) => ({ lignes: [], especes: 0, mode: 'simple', ...x })),
+    enveloppes: (e.enveloppes || []).map((x) => ({ lignes: [], especes: 0, mode: 'simple', ...x, deviseVersements: x.deviseVersements || x.devise || 'EUR' })),
     pilier3: e.pilier3 || [],
     historique: e.historique || [],
   };
@@ -226,7 +226,7 @@ export function bilan(e = etat, devise = e.reglages.devise) {
     ajout(v, x.devise);
     return s + c(v, x.devise);
   }, 0);
-  const versementsMensuels = e.enveloppes.reduce((s, x) => s + c(x.versementMensuel, x.devise), 0);
+  const versementsMensuels = e.enveloppes.reduce((s, x) => s + c(x.versementMensuel, x.deviseVersements || x.devise), 0);
   const rendementMoyen = placements
     ? e.enveloppes.reduce((s, x) => s + c(valeurEnveloppe(x), x.devise) * (+x.rendement || 0), 0) / placements
     : 0.05;

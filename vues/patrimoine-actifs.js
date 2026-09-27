@@ -117,11 +117,12 @@ const TYPES = ['PEA', 'CTO', 'Assurance-vie', 'PER', 'Livret', 'Compte épargne 
 const champsEnveloppe = [
   { cle: 'nom', libelle: 'Nom', type: 'text', requis: true },
   { cle: 'type', libelle: 'Type', type: 'select', options: TYPES },
-  { cle: 'devise', libelle: 'Devise', type: 'devise', usd: true, aide: 'Les titres cotés dans une autre devise sont convertis au taux du jour.' },
+  { cle: 'devise', libelle: 'Devise de valorisation', type: 'devise', usd: true, aide: 'Devise dans laquelle le compte est valorisé. Les titres cotés dans une autre devise sont convertis au taux du jour.' },
+  { cle: 'deviseVersements', libelle: 'Devise des versements', type: 'devise', usd: true, visible: (v) => v.type !== 'PEA', aide: 'Devise de votre argent versé (ex. euros convertis en dollars). La plus-value et la fiscalité sont calculées dans cette devise, effet de change compris.' },
   { cle: 'etablissement', libelle: 'Établissement (facultatif)', type: 'text' },
   { cle: 'valeur', libelle: 'Valeur actuelle', type: 'number', requis: true, visible: (v) => true, aide: 'En mode avancé, la valeur est calculée à partir des lignes.' },
-  { cle: 'verses', libelle: 'Total des versements effectués', type: 'number', aide: 'Sert à calculer la plus-value et la fiscalité de sortie.' },
-  { cle: 'versementMensuel', libelle: 'Versement mensuel', type: 'number' },
+  { cle: 'verses', libelle: 'Total des versements effectués', type: 'number', aide: 'Dans la devise des versements. Sert à calculer la plus-value et la fiscalité de sortie.' },
+  { cle: 'versementMensuel', libelle: 'Versement mensuel', type: 'number', aide: 'Dans la devise des versements.' },
   { cle: 'rendement', libelle: 'Performance annuelle moyenne attendue', type: 'pct', pas: 0.1 },
   { cle: 'dateOuverture', libelle: "Date d'ouverture", type: 'date', visible: (v) => v.type === 'PEA', aide: 'Après 5 ans, le PEA est exonéré d\'impôt sur le revenu.' },
 ];
@@ -182,15 +183,16 @@ export function panneauPlacements(el, rafraichir) {
 
     if (cible.dataset.ajout === 'enveloppe' || cible.dataset.modifEnv) {
       const x = e.enveloppes.find((y) => y.id === cible.dataset.modifEnv);
-      const valeurs = x ? { ...x } : { type: 'PEA', devise: 'EUR', rendement: 0.06, versementMensuel: 0 };
+      const valeurs = x ? { deviseVersements: x.devise || 'EUR', ...x } : { type: 'PEA', devise: 'EUR', deviseVersements: 'EUR', rendement: 0.06, versementMensuel: 0 };
       const r = await formulaire({ titre: x ? `Modifier ${x.nom}` : 'Ajouter une enveloppe', champs: champsEnveloppe, valeurs, supprimable: !!x });
       if (!r) return;
+      if (r.valeurs && (r.valeurs.type === 'PEA' || !r.valeurs.deviseVersements)) r.valeurs.deviseVersements = r.valeurs.devise || 'EUR';
       modifier((s) => {
         if (r.action === 'supprimer') s.enveloppes = s.enveloppes.filter((y) => y.id !== x.id);
         else if (x) Object.assign(s.enveloppes.find((y) => y.id === x.id), r.valeurs);
         else {
           const v = r.valeurs;
-          if (/CH$/.test(v.type) && v.devise === 'EUR') v.devise = 'CHF';
+          if (/CH$/.test(v.type) && v.devise === 'EUR') { v.devise = 'CHF'; if (v.deviseVersements === 'EUR') v.deviseVersements = 'CHF'; }
           s.enveloppes.push({ id: uid(), mode: 'simple', lignes: [], especes: 0, ...v });
         }
       });
@@ -229,21 +231,27 @@ export function panneauPlacements(el, rafraichir) {
 
 function carteEnveloppe(x, frontalier) {
   const d = x.devise || 'EUR';
+  const dv = x.deviseVersements || d; // devise des versements
+  const mixte = dv !== d;
+  const taux = lire().reglages.tauxChange;
   const f = (v) => money(v, d);
+  const fv = (v) => money(v, dv);
   const valeur = valeurEnveloppe(x);
+  const valeurDv = convertir(valeur, d, dv, taux); // la plus-value se calcule dans la devise versée
   const verses = +x.verses || 0;
-  const gain = verses ? valeur - verses : null;
+  const gain = verses ? valeurDv - verses : null;
   const anciennete = ancienneteAnnees(x.dateOuverture);
-  const fisc = fiscaliteSortie({ type: x.type, valeur, verses: verses || valeur, ancienneteAnnees: anciennete, frontalier });
-  const dans10 = valeurFuture({ capital: valeur, versementMensuel: +x.versementMensuel || 0, rendement: +x.rendement || 0, mois: 120 });
+  const fisc = fiscaliteSortie({ type: x.type, valeur: valeurDv, verses: verses || valeurDv, ancienneteAnnees: anciennete, frontalier });
+  const mensuelD = convertir(+x.versementMensuel || 0, dv, d, taux);
+  const dans10 = valeurFuture({ capital: valeur, versementMensuel: mensuelD, rendement: +x.rendement || 0, mois: 120 });
   const avance = x.mode === 'avance';
 
   const corpsSimple = `
     <div class="grille g4" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.8rem">
-      ${mini('Valeur', f(valeur))}
-      ${mini('Versé', verses ? f(verses) : '—')}
-      ${mini('Plus-value', gain === null ? '—' : `<span class="${gain < 0 ? 'neg' : 'pos'}">${gain >= 0 ? '+' : '−'}${f(Math.abs(gain))}</span>`)}
-      ${mini('Dans 10 ans', f(dans10), `${f(x.versementMensuel || 0)}/mois à ${pct(x.rendement || 0, 1)}`)}
+      ${mini('Valeur', f(valeur), mixte ? `≈ ${fv(valeurDv)}` : '')}
+      ${mini('Versé', verses ? fv(verses) : '—')}
+      ${mini('Plus-value', gain === null ? '—' : `<span class="${gain < 0 ? 'neg' : 'pos'}">${gain >= 0 ? '+' : '−'}${fv(Math.abs(gain))}</span>`, mixte && gain !== null ? `en ${dv}, change compris` : '')}
+      ${mini('Dans 10 ans', f(dans10), `${fv(x.versementMensuel || 0)}/mois à ${pct(x.rendement || 0, 1)}`)}
     </div>`;
 
   const corpsAvance = `
@@ -265,22 +273,22 @@ function carteEnveloppe(x, frontalier) {
   return `
   <div class="carte">
     <div class="carte-tete">
-      <h3>${ico(icones.enveloppe, 'var(--sapin-clair)', 'var(--sapin)')} <span>${esc(x.nom)}<small style="display:block;font-weight:500">${esc(x.type)}${x.etablissement ? ' · ' + esc(x.etablissement) : ''}</small></span> ${badge(d)}</h3>
+      <h3>${ico(icones.enveloppe, 'var(--sapin-clair)', 'var(--sapin)')} <span>${esc(x.nom)}<small style="display:block;font-weight:500">${esc(x.type)}${x.etablissement ? ' · ' + esc(x.etablissement) : ''}${mixte ? ` · versements en ${dv}` : ''}</small></span> ${badge(d)}${mixte ? badge(dv) : ''}</h3>
       <div class="pile">
         <label class="interrupteur" style="font-size:.8rem" title="Détail ligne à ligne"><input type="checkbox" data-mode="${x.id}" ${avance ? 'checked' : ''}><span></span>Détail des lignes</label>
         <button class="btn mini discret" data-modif-env="${x.id}">Modifier</button>
       </div>
     </div>
-    ${avance ? `<div style="font-size:1.6rem;font-weight:750;letter-spacing:-.02em;margin:-.3rem 0 .8rem">${f(valeur)}</div>${corpsAvance}` : corpsSimple}
+    ${avance ? `<div style="font-size:1.6rem;font-weight:750;letter-spacing:-.02em;margin:-.3rem 0 .8rem">${f(valeur)}${mixte ? ` <small style="font-size:.9rem;font-weight:550;color:var(--encre-3)">≈ ${fv(valeurDv)}</small>` : ''}</div>${corpsAvance}` : corpsSimple}
     ${fisc ? `<div class="ligne-fiscale">
-        <div><span>Retrait total aujourd'hui</span><b>${f(valeur)}</b></div>
-        <div><span>Plus-value imposable</span><b>${f(fisc.gain)}</b></div>
-        <div><span>Prélèvements (${pct(fisc.taux, 1)})</span><b class="neg">−${f(fisc.impot)}</b></div>
-        <div><span>Net perçu</span><b class="pos">${f(fisc.net)}</b></div>
+        <div><span>Retrait total aujourd'hui</span><b>${fv(valeurDv)}</b></div>
+        <div><span>Plus-value imposable</span><b>${fv(fisc.gain)}</b></div>
+        <div><span>Prélèvements (${pct(fisc.taux, 1)})</span><b class="neg">−${fv(fisc.impot)}</b></div>
+        <div><span>Net perçu</span><b class="pos">${fv(fisc.net)}</b></div>
       </div>
       <small style="display:block;margin-top:.45rem">${x.type === 'PEA'
         ? (anciennete >= 5 ? `PEA de plus de 5 ans : pas d'impôt sur le revenu, seulement les prélèvements ${frontalier ? 'de solidarité (frontalier)' : 'sociaux'}.` : `PEA de moins de 5 ans (${anciennete.toFixed(1).replace('.', ',')} an) : impôt de 12,8 % en plus des prélèvements, et clôture du plan.`)
-        : `Compte titres : prélèvement forfaitaire unique${frontalier ? ' avec exonération de CSG/CRDS' : ''}.`}${!verses ? ' Renseignez vos versements pour un calcul exact.' : ''}</small>` : ''}
+        : `Compte titres : prélèvement forfaitaire unique${frontalier ? ' avec exonération de CSG/CRDS' : ''}.`}${mixte ? ` Plus-value calculée en ${dv} au taux du jour : le fisc français la mesure en euros, gain ou perte de change compris.` : ''}${!verses ? ' Renseignez vos versements pour un calcul exact.' : ''}</small>` : ''}
   </div>`;
 }
 
