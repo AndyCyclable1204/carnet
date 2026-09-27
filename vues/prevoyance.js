@@ -1,5 +1,5 @@
 import { lire, modifier, reglage, uid } from '../js/store.js';
-import { projectionLPP, projectionCapital, tauxBonificationLPP, salaireCoordonne, LPP, PILIER3A } from '../js/finance.js';
+import { projectionLPP, estimationAvoirLPP, projectionCapital, tauxBonificationLPP, salaireCoordonne, LPP, PILIER3A } from '../js/finance.js';
 import { money, pct, esc, COULEURS, convertir  } from '../js/format.js';
 import { $, $$, graphique, animerNombre, formulaire, toast, echelleMontant, echelleX, remplissage, degrade } from '../js/ui.js';
 import { icones } from '../js/icones.js';
@@ -11,7 +11,6 @@ const TRANCHES = [
   { de: 45, a: 54, taux: 0.15 },
   { de: 55, a: 65, taux: 0.18 },
 ];
-const couleurTranche = (age) => (age < 35 ? '#93c5fd' : age < 45 ? '#5b9bd5' : age < 55 ? '#2471b3' : '#0b1f33');
 
 export function panneauPrevoyance(el, rafraichir) {
   const e = lire();
@@ -53,7 +52,17 @@ function rendreLPP(el, rafraichir) {
           ${champ('ageRetraite', 'Retraite à', l.ageRetraite, 'ans', 1)}
         </div>
         ${champ('salaire', 'Salaire annuel brut', l.salaire, 'CHF', 100)}
-        ${champ('avoir', 'Avoir de vieillesse actuel', l.avoir, 'CHF', 100, 'Sur votre certificat de prévoyance annuel.')}
+        ${champ('avoir', 'Avoir de vieillesse actuel', l.avoir, 'CHF', 100, 'Ligne « prestation de sortie » de votre certificat de prévoyance.')}
+        <div class="estimer" id="blocEstimer">
+          <button type="button" class="btn mini discret" id="btnEstimer">Pas de certificat sous la main ? Estimer</button>
+          <div id="formEstimer" hidden>
+            <div class="duo" style="align-items:end">
+              <div class="champ" style="margin:0"><label>Cotisations depuis l'âge de<span class="saisie avec-suffixe"><input type="number" id="ageDebut" value="25" min="25" max="70" step="1" inputmode="numeric"><i>ans</i></span></label></div>
+              <button type="button" class="btn mini" id="appliquerEstimation">Utiliser</button>
+            </div>
+            <small id="resEstimer"></small>
+          </div>
+        </div>
         <div class="champ"><label class="interrupteur"><input type="checkbox" id="optAssure" ${l.salaireAssure != null ? 'checked' : ''}><span></span>Salaire assuré indiqué sur mon certificat</label></div>
         <div id="blocAssure" ${l.salaireAssure != null ? '' : 'hidden'}>${champ('salaireAssure', 'Salaire assuré', l.salaireAssure ?? '', 'CHF', 100, 'Pour les caisses surobligatoires ou sans déduction de coordination.')}</div>
         <div class="champ"><label class="interrupteur"><input type="checkbox" id="optTaux" ${l.tauxManuel != null ? 'checked' : ''}><span></span>Taux de bonification de mon règlement</label></div>
@@ -63,6 +72,7 @@ function rendreLPP(el, rafraichir) {
           <input type="range" id="partEmp" min="50" max="100" step="5" value="${Math.round(l.partEmployeur * 100)}">
           <small>50/50 est le minimum légal. Beaucoup de contrats prévoient 60/40 ou davantage.</small>
         </div>
+        ${champ('progression', 'Augmentation de salaire annuelle', +((l.progression || 0) * 100).toFixed(2), '%', 0.1, 'Moyenne sur la carrière. 0 % = salaire figé : les versements ne changent qu\'aux paliers d\'âge.')}
         ${champ('interet', 'Intérêt crédité projeté', +(l.interet * 100).toFixed(2), '%', 0.05, `Minimum légal ${LPP.annee} : ${pct(LPP.tauxInteretMinimal)} sur la part obligatoire.`)}
         <button class="btn mini danger" id="desactiver" style="margin-top:.6rem">Retirer la LPP du tableau de bord</button>
       </div>
@@ -84,6 +94,7 @@ function rendreLPP(el, rafraichir) {
         <div class="carte" style="margin-top:1rem">
           <div class="carte-tete"><h3>Évolution de l'avoir jusqu'à la retraite</h3><span class="badge" id="sPalier"></span></div>
           <div class="cadre-graphique haut"><canvas id="gLPP"></canvas></div>
+          <small style="display:block;margin-top:.6rem">Chaque barre = votre avoir total à cet âge (échelle en CHF). Il grimpe plus vite à 35, 45 et 55 ans : le taux de bonification légal passe à 10, 15 puis 18 %. Survolez une barre pour le détail.</small>
         </div>
         <div class="carte" style="margin-top:1rem" id="tranches">${tableTranches(e.reglages.age)}</div>
       </div>
@@ -102,6 +113,33 @@ function rendreLPP(el, rafraichir) {
     $('[name="tauxManuel"]', el).value = lire().lpp.tauxManuel != null ? +(lire().lpp.tauxManuel * 100).toFixed(2) : '';
     maj();
   });
+  // Estimation de l'avoir actuel (minimum légal) quand le certificat n'est pas disponible.
+  const estimer = () => {
+    const s = lire();
+    const r = estimationAvoirLPP({
+      ageDebut: +$('#ageDebut', el).value, age: +s.reglages.age || 30, salaire: +s.lpp.salaire || 0,
+      progressionSalaire: +s.lpp.progression || 0, interet: s.lpp.interet, salaireAssure: s.lpp.salaireAssure, tauxManuel: s.lpp.tauxManuel,
+    });
+    $('#resEstimer', el).innerHTML = r.annees
+      ? `≈ <b>${chf(Math.round(r.avoir / 100) * 100)}</b> après ${r.annees} an${r.annees > 1 ? 's' : ''} de cotisations au minimum légal. Votre caisse peut assurer davantage : le certificat reste la référence.`
+      : 'Aucune cotisation avant votre âge actuel (l\'épargne LPP démarre à 25 ans).';
+    return r;
+  };
+  $('#btnEstimer', el).addEventListener('click', () => {
+    const f = $('#formEstimer', el);
+    f.hidden = !f.hidden;
+    if (!f.hidden) estimer();
+  });
+  $('#ageDebut', el).addEventListener('input', estimer);
+  $('#appliquerEstimation', el).addEventListener('click', () => {
+    const v = Math.round(estimer().avoir / 100) * 100;
+    modifier((s) => (s.lpp.avoir = v));
+    $('[name="avoir"]', el).value = v;
+    $('#formEstimer', el).hidden = true;
+    toast('Avoir estimé appliqué');
+    maj();
+  });
+
   $('#desactiver', el).addEventListener('click', () => {
     modifier((s) => (s.lpp.actif = false));
     rafraichir();
@@ -112,10 +150,12 @@ function rendreLPP(el, rafraichir) {
     const v = ev.target.value === '' ? null : +ev.target.value;
     if (n === 'partEmp') modifier((s) => (s.lpp.partEmployeur = v / 100));
     else if (n === 'age') { if (v >= 15 && v <= 70) reglage((r) => (r.age = v)); }
+    else if (n === 'progression') modifier((s) => (s.lpp.progression = (v ?? 0) / 100));
     else if (n === 'interet') modifier((s) => (s.lpp.interet = (v ?? 0) / 100));
     else if (n === 'tauxManuel') modifier((s) => (s.lpp.tauxManuel = v == null ? null : v / 100));
     else if (['salaire', 'avoir', 'salaireAssure', 'ageRetraite'].includes(n)) modifier((s) => (s.lpp[n] = v));
     else return;
+    if (!$('#formEstimer', el).hidden) estimer();
     maj();
   });
 
@@ -129,6 +169,7 @@ function rendreLPP(el, rafraichir) {
     const r = projectionLPP({
       age, ageRetraite: ageR, salaire: +l.salaire || 0, avoir: +l.avoir || 0,
       salaireAssure: l.salaireAssure, tauxManuel: l.tauxManuel, partEmployeur: l.partEmployeur, interet: l.interet,
+      progressionSalaire: +l.progression || 0,
     });
     const range = $('#partEmp', el);
     remplissage(range);
@@ -143,55 +184,77 @@ function rendreLPP(el, rafraichir) {
     $('#sPat-s', el).textContent = `${chf(r.partEmployeurMensuelle * 12)} par an`;
     $('#sAgeR', el).textContent = ageR;
     animerNombre($('#sAvoir', el), r.avoirRetraite, chf);
-    $('#sAvoirEur', el).textContent = `soit ${money(convertir(r.avoirRetraite, 'CHF', 'EUR', s.reglages.tauxChange), 'EUR')} au taux du jour`;
+    $('#sAvoirEur', el).textContent = `soit ${money(convertir(r.avoirRetraite, 'CHF', 'EUR', s.reglages.tauxChange), 'EUR')} au taux du jour` + (l.avoir == null || l.avoir === '' ? ' · avoir actuel non renseigné' : '');
     animerNombre($('#sRente', el), r.renteAnnuelle, chf);
     $('#sRenteM', el).textContent = `${chf(r.renteAnnuelle / 12)} par mois`;
     const tr = $('#tranches', el); if (tr) tr.innerHTML = tableTranches(age);
     $('#sPalier', el).textContent = r.prochainPalier ? `Prochain palier de taux à ${r.prochainPalier} ans` : l.tauxManuel != null ? 'Taux fixe' : 'Dernière tranche atteinte';
 
     const serie = r.serie;
-    const cotis = serie.slice(1).map((p, i) => {
-      const a = age + i;
-      const t = l.tauxManuel != null ? l.tauxManuel : tauxBonificationLPP(a);
-      return (l.salaireAssure != null ? l.salaireAssure : salaireCoordonne(+l.salaire || 0)) * t;
-    });
+    if (g) g.$serie = serie;
     const data = {
       labels: serie.map((p) => p.age),
       datasets: [
-        { type: 'line', label: 'Avoir de vieillesse', data: serie.map((p) => p.avoir), borderColor: COULEURS.alpin, backgroundColor: degrade(canvas, COULEURS.alpin, 0.28), fill: true, borderWidth: 2.4, pointRadius: 0, tension: 0.25, yAxisID: 'y' },
-        { type: 'bar', label: 'Bonifications de l\'année', data: [0, ...cotis], backgroundColor: serie.map((p) => couleurTranche(p.age - 1)), borderRadius: 4, yAxisID: 'y2', barPercentage: 0.7 },
+        { label: 'Avoir actuel + intérêts', data: serie.map((p) => p.base), backgroundColor: '#9cc3e6', borderRadius: 3, stack: 'a' },
+        { label: 'Vos cotisations', data: serie.map((p) => p.employe), backgroundColor: COULEURS.lac, borderRadius: 3, stack: 'a' },
+        { label: "Cotisations de l'employeur", data: serie.map((p) => p.employeur), backgroundColor: COULEURS.alpin, borderRadius: 3, stack: 'a' },
       ],
     };
     if (g) {
       g.data.labels = data.labels;
-      g.data.datasets[0].data = data.datasets[0].data;
-      g.data.datasets[1].data = data.datasets[1].data;
-      g.data.datasets[1].backgroundColor = data.datasets[1].backgroundColor;
+      data.datasets.forEach((d, i) => (g.data.datasets[i].data = d.data));
       g.update();
       return;
     }
     g = graphique(canvas, {
+      type: 'bar',
       data,
+      plugins: [ligneSurvol],
       options: {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
+        datasets: { bar: { barPercentage: 0.82, categoryPercentage: 0.9 } },
         plugins: {
           legend: { position: 'bottom' },
-          tooltip: { callbacks: { title: (i) => `${i[0].label} ans`, label: (c) => `${c.dataset.label} : ${chf(c.raw)}` } },
+          tooltip: {
+            padding: 12,
+            callbacks: {
+              title: (i) => `À ${i[0].label} ans`,
+              label: (c) => ` ${c.dataset.label} : ${chf(c.raw)}`,
+              footer: (i) => {
+                const p = g.$serie[i[0].dataIndex];
+                const lignes = [`Avoir total : ${chf(p.avoir)}`];
+                if (p.cotisation) lignes.push(`Versé l'année écoulée : ${chf(p.cotisation)} (${pct(p.taux, 0)} de ${chf(p.salaireAssure)})`);
+                return lignes;
+              },
+            },
+          },
         },
         scales: {
-          x: echelleX('âge'),
-          y: echelleMontant({ position: 'left' }),
-          y2: echelleMontant({ position: 'right', grid: { display: false } }),
+          x: { ...echelleX('âge'), stacked: true },
+          y: echelleMontant({ stacked: true, title: { display: true, text: 'CHF' } }),
         },
       },
     });
+    g.$serie = serie;
   }
   maj();
 }
 
+// Trait vertical qui suit la souris sur le graphique.
+const ligneSurvol = {
+  id: 'ligneSurvol',
+  afterDatasetsDraw(ch) {
+    const a = ch.tooltip?.getActiveElements?.();
+    if (!a?.length) return;
+    const x = a[0].element.x, { top, bottom } = ch.chartArea, c = ch.ctx;
+    c.save(); c.strokeStyle = 'rgba(11,31,51,.25)'; c.lineWidth = 1; c.setLineDash([4, 4]);
+    c.beginPath(); c.moveTo(x, top); c.lineTo(x, bottom); c.stroke(); c.restore();
+  },
+};
+
 const champ = (nom, libelle, valeur, suffixe, pas, aide = '') => `
-  <div class="champ"><label>${libelle}<span class="saisie ${suffixe ? 'avec-suffixe' : ''}"><input type="number" name="${nom}" value="${valeur ?? ''}" step="${pas}" inputmode="decimal">${suffixe ? `<i>${suffixe}</i>` : ''}</span></label>${aide ? `<small>${aide}</small>` : ''}</div>`;
+  <div class="champ"><label>${libelle}<span class="saisie ${suffixe ? 'avec-suffixe' : ''}"><input type="number" name="${nom}" value="${valeur ?? ''}" step="${pas}" inputmode="decimal"${nom === 'avoir' ? ' placeholder="À saisir"' : ''}>${suffixe ? `<i>${suffixe}</i>` : ''}</span></label>${aide ? `<small>${aide}</small>` : ''}</div>`;
 
 const sortie = (libelle, id) => `
   <div class="carte kpi"><div class="libelle">${libelle}</div><div class="valeur" id="${id}" style="font-size:1.35rem">—</div><div class="sous" id="${id}-s"></div></div>`;

@@ -172,9 +172,10 @@ async function actionCours(symboles: string[]) {
 }
 
 async function actionChange() {
-  const { cotations } = await actionCours(['EURCHF=X']);
+  const { cotations } = await actionCours(['EURCHF=X', 'EURUSD=X']);
+  const trouver = (s: string) => cotations.find((c) => c.symbole === s)?.prix ?? null;
   const { data } = await admin.from('cotations').select('maj_le').eq('symbole', 'EURCHF=X').maybeSingle();
-  return { taux: cotations[0]?.prix ?? null, maj: data?.maj_le ?? new Date().toISOString() };
+  return { taux: trouver('EURCHF=X'), tauxUSD: trouver('EURUSD=X'), maj: data?.maj_le ?? new Date().toISOString() };
 }
 
 async function lireCacheClassement(cle: string) {
@@ -196,7 +197,8 @@ async function ecrireCacheClassement(cle: string, donnees: unknown) {
 
 async function actionClassement(type: string) {
   if (type !== 'etf' && type !== 'dividendes') throw new Error('Classement inconnu');
-  const enCache = await lireCacheClassement(type);
+  const cle = `${type}-v2`;
+  const enCache = await lireCacheClassement(cle);
   if (enCache) return enCache;
 
   let lignes: unknown[];
@@ -214,12 +216,12 @@ async function actionClassement(type: string) {
       const total = recents.reduce((a, d) => a + (d.amount || 0), 0);
       const prix = res.meta.regularMarketPrice;
       // Cotations en pence (GBp) ou en centimes : on ignore, l'univers est en EUR et CHF.
-      return { symbole: s, ...ACTIONS[s], devise: res.meta.currency, prix, dividende: total, versements: recents.length, rendement: total > 0 ? total / prix : 0 };
+      return { symbole: s, ...ACTIONS[s], devise: res.meta.currency, ...performances(res), prix, dividende: total, versements: recents.length, rendement: total > 0 ? total / prix : 0 };
     });
   }
   if (!lignes.length) throw new Error('Source de cotation indisponible pour le moment, réessayez plus tard.');
   const resultat = { maj: new Date().toISOString(), lignes };
-  await ecrireCacheClassement(type, resultat);
+  await ecrireCacheClassement(cle, resultat);
   return resultat;
 }
 

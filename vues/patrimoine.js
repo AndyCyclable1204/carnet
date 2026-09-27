@@ -78,8 +78,11 @@ function synthese(el) {
   const f = (v) => money(v, dev);
   const dernier = e.historique.at(-1);
   const netHisto = dernier ? (dev === 'CHF' ? dernier.netCHF : dernier.netEUR) : null;
-  const totalDevise = Math.max(1, b.parDevise.EUR + b.parDevise.CHF);
-  const partCHF = Math.max(0, b.parDevise.CHF) / totalDevise;
+  const pos = (d) => Math.max(0, b.parDevise[d] || 0);
+  const totalDevise = Math.max(1, pos('EUR') + pos('CHF') + pos('USD'));
+  const partCHF = pos('CHF') / totalDevise;
+  const partUSD = pos('USD') / totalDevise;
+  const partEUR = Math.max(0, 1 - partCHF - partUSD);
 
   el.innerHTML = `
     ${e.exemple ? `<div class="encart info" style="margin-bottom:1rem">${icones.info.replace('<svg', '<svg width="18" height="18" style="flex:none"')}
@@ -91,8 +94,8 @@ function synthese(el) {
         <div class="grand-chiffre" id="kNet">${f(0)}</div>
         <div class="sous">${netHisto != null ? `<span class="delta ${b.net - netHisto < 0 ? 'neg' : ''}">${b.net - netHisto >= 0 ? '+' : '−'} ${f(Math.abs(b.net - netHisto))}</span> depuis le point du ${dateFr(dernier.date)}` : 'Enregistrez un point dans Historique pour suivre son évolution.'}</div>
         <div style="margin-top:1.4rem">
-          <div class="entre-deux" style="font-size:.82rem;color:#b9cbe0"><span><span class="devise eur">EUR</span> ${pct(1 - partCHF, 0)}</span><span>${pct(partCHF, 0)} <span class="devise chf">CHF</span></span></div>
-          <div class="barre-repartition" style="background:rgba(255,255,255,.12)"><i style="width:${(1 - partCHF) * 100}%;background:#5b9bd5"></i><i style="width:${partCHF * 100}%;background:var(--alpin)"></i></div>
+          <div class="entre-deux" style="font-size:.82rem;color:#b9cbe0"><span><span class="devise eur">EUR</span> ${pct(partEUR, 0)}</span>${partUSD > 0 ? `<span><span class="devise usd">USD</span> ${pct(partUSD, 0)}</span>` : ''}<span>${pct(partCHF, 0)} <span class="devise chf">CHF</span></span></div>
+          <div class="barre-repartition" style="background:rgba(255,255,255,.12)"><i style="width:${partEUR * 100}%;background:#5b9bd5"></i>${partUSD > 0 ? `<i style="width:${partUSD * 100}%;background:#9b8ff0"></i>` : ''}<i style="width:${partCHF * 100}%;background:var(--alpin)"></i></div>
           <small style="color:#8fa6bf">Exposition de votre patrimoine net par devise</small>
         </div>
       </div>
@@ -212,7 +215,7 @@ function serieprevoyance(e, annees, dev) {
   const age = +e.reglages.age || 30;
   const out = new Array(annees + 1).fill(0);
   if (e.lpp.actif) {
-    const l = projectionLPP({ ...e.lpp, age, avoir: +e.lpp.avoir || 0, salaire: +e.lpp.salaire || 0, ageRetraite: Math.max(age + annees, e.lpp.ageRetraite) });
+    const l = projectionLPP({ ...e.lpp, progressionSalaire: +e.lpp.progression || 0, age, avoir: +e.lpp.avoir || 0, salaire: +e.lpp.salaire || 0, ageRetraite: Math.max(age + annees, e.lpp.ageRetraite) });
     for (let a = 0; a <= annees; a++) {
       // au-delà de l'âge de retraite, l'avoir est figé (rente ou capital versé)
       const idx = Math.min(a, Math.max(0, e.lpp.ageRetraite - age));

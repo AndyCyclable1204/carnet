@@ -20,7 +20,12 @@ export const PILIER3A = { annee: 2026, plafondSalarie: 7258 };
 export const FISCAL = {
   annee: 2026,
   psPlacements: 0.186, // PEA, CTO, dividendes, plus-values mobilières
-  psFonciers: 0.172, // revenus fonciers (location nue, SCPI)
+  psFonciers: 0.172, // revenus fonciers (location nue, SCPI), plus-values immobilières
+  psMeuble: 0.186, // location meublée non professionnelle (LMNP, BIC)
+  plafondMicroFoncier: 15000,
+  plafondMicroBIC: 83600, // meublé longue durée, recettes 2026
+  // Durées d'amortissement usuelles en LMNP au réel
+  amortBati: 30, amortTravaux: 15, amortMobilier: 7,
   solidarite: 0.075, // seul prélèvement dû en cas d'exonération CSG/CRDS (frontalier)
   irForfaitaire: 0.128,
 };
@@ -147,6 +152,19 @@ export function salaireCoordonne(salaire) {
   return Math.max(Math.min(salaire, LPP.salaireMaxObligatoire) - LPP.deductionCoordination, LPP.salaireCoordMin);
 }
 
+// Estimation de l'avoir actuel à partir de l'âge de début de cotisation (minimum légal).
+// Le salaire passé est reconstitué en retirant la progression annuelle au salaire actuel.
+export function estimationAvoirLPP({ ageDebut, age, salaire, progressionSalaire = 0, interet = LPP.tauxInteretMinimal, salaireAssure = null, tauxManuel = null }) {
+  const debut = Math.max(25, Math.round(ageDebut || 25));
+  let a = 0;
+  for (let x = debut; x < age; x++) {
+    const recul = Math.pow(1 + progressionSalaire, age - x);
+    const assure = salaireAssure != null ? salaireAssure / recul : salaireCoordonne(salaire / recul);
+    a = a * (1 + interet) + assure * (tauxManuel != null ? tauxManuel : tauxBonificationLPP(x));
+  }
+  return { avoir: a, annees: Math.max(0, age - debut) };
+}
+
 // salaireAssure : si renseigné, remplace le salaire coordonné légal (plans surobligatoires).
 // tauxManuel : si renseigné, remplace la grille légale par âge.
 export function projectionLPP({
@@ -168,11 +186,15 @@ export function projectionLPP({
   const taux = (a) => (tauxManuel != null ? tauxManuel : tauxBonificationLPP(a));
 
   const cotisationAnnuelle = assure(0) * taux(age);
-  const serie = [{ age, avoir }];
-  let a = avoir;
+  // Chaque point : avoir total décomposé en (avoir de départ + intérêts), cumul employé, cumul employeur.
+  const serie = [{ age, avoir, base: avoir, employe: 0, employeur: 0, cotisation: 0, taux: 0, salaireAssure: assure(0) }];
+  let a = avoir, cumE = 0, cumP = 0;
   for (let x = age, k = 0; x < ageRetraite; x++, k++) {
-    a = a * (1 + interet) + assure(k) * taux(x);
-    serie.push({ age: x + 1, avoir: a });
+    const c = assure(k) * taux(x);
+    a = a * (1 + interet) + c;
+    cumE += c * (1 - partEmployeur);
+    cumP += c * partEmployeur;
+    serie.push({ age: x + 1, avoir: a, base: a - cumE - cumP, employe: cumE, employeur: cumP, cotisation: c, taux: taux(x), salaireAssure: assure(k) });
   }
   const prochainPalier = [25, 35, 45, 55].find((p) => p > age);
   return {
@@ -214,26 +236,70 @@ export function fiscaliteSortie({ type, valeur, verses, ancienneteAnnees = 0, fr
 
 /* ============================================================ immobilier locatif */
 
+// regime : 'micro' (micro-foncier, nu), 'reel' (réel foncier, nu),
+//          'microbic' (LMNP micro-BIC, abattement 50 %), 'lmnp' (LMNP réel avec amortissements).
 export function rendementLocatif({
-  prix, frais = 0, travaux = 0, loyerMensuel, chargesAnnuelles = 0, taxeFonciere = 0,
-  vacance = 0, tmi = 0.3, regime = 'micro', frontalier = false,
+  prix, frais = 0, travaux = 0, mobilier = 0, loyerMensuel, chargesAnnuelles = 0, taxeFonciere = 0,
+  vacance = 0, tmi = 0.3, regime = 'micro', frontalier = false, partTerrain = 0.15,
 }) {
-  const investi = prix + frais + travaux;
+  const meuble = regime === 'microbic' || regime === 'lmnp';
+  const investi = prix + frais + travaux + (meuble ? mobilier : 0);
   if (!investi) return null;
   const loyerAnnuel = loyerMensuel * 12 * (1 - vacance);
   const charges = chargesAnnuelles + taxeFonciere;
-  const ps = frontalier ? FISCAL.solidarite : FISCAL.psFonciers;
-  const base = regime === 'micro' ? loyerAnnuel * 0.7 : Math.max(0, loyerAnnuel - charges);
+  const ps = frontalier ? FISCAL.solidarite : meuble ? FISCAL.psMeuble : FISCAL.psFonciers;
+  const resultat = loyerAnnuel - charges;
+
+  let base, amort = null;
+  if (regime === 'micro') base = loyerAnnuel * 0.7;
+  else if (regime === 'microbic') base = loyerAnnuel * 0.5;
+  else if (regime === 'reel') base = Math.max(0, resultat);
+  else {
+    amort = amortissementsLMNP({ prix, frais, travaux, mobilier, partTerrain, resultat });
+    base = amort.serie[0].base;
+  }
   const impot = base * (tmi + ps);
   return {
     investi,
     loyerAnnuel,
+    charges,
     brut: loyerAnnuel / investi,
-    net: (loyerAnnuel - charges) / investi,
-    netNet: (loyerAnnuel - charges - impot) / investi,
+    net: resultat / investi,
+    netNet: (resultat - impot) / investi,
     impot,
-    cashflowMensuel: (loyerAnnuel - charges - impot) / 12,
-    microEligible: loyerMensuel * 12 <= 15000,
+    tauxPS: ps,
+    cashflowMensuel: (resultat - impot) / 12,
+    microEligible: loyerMensuel * 12 <= (meuble ? FISCAL.plafondMicroBIC : FISCAL.plafondMicroFoncier),
+    plafondMicro: meuble ? FISCAL.plafondMicroBIC : FISCAL.plafondMicroFoncier,
+    amort,
+  };
+}
+
+// LMNP au réel : le terrain ne s'amortit pas ; les frais de notaire suivent le bien.
+// L'amortissement ne peut pas créer de déficit : l'excédent est reporté sans limite de durée.
+export function amortissementsLMNP({ prix, frais = 0, travaux = 0, mobilier = 0, partTerrain = 0.15, resultat, horizon = 40 }) {
+  const bati = (prix + frais) * (1 - partTerrain);
+  const annuel = (a) =>
+    (a <= FISCAL.amortBati ? bati / FISCAL.amortBati : 0) +
+    (a <= FISCAL.amortTravaux ? travaux / FISCAL.amortTravaux : 0) +
+    (a <= FISCAL.amortMobilier ? mobilier / FISCAL.amortMobilier : 0);
+  let report = 0;
+  let anneesSansImpot = null;
+  const serie = [];
+  for (let a = 1; a <= horizon; a++) {
+    const dispo = annuel(a) + report;
+    const utilise = Math.min(dispo, Math.max(0, resultat));
+    report = dispo - utilise;
+    const base = Math.max(0, resultat - utilise);
+    if (base > 0.5 && anneesSansImpot === null) anneesSansImpot = a - 1;
+    serie.push({ annee: a, amortissement: annuel(a), utilise, report, base });
+  }
+  return {
+    annuel: annuel(1),
+    detail: { bati: bati / FISCAL.amortBati, travaux: travaux / FISCAL.amortTravaux, mobilier: mobilier / FISCAL.amortMobilier },
+    anneesSansImpot: anneesSansImpot === null ? horizon : anneesSansImpot,
+    auDela: anneesSansImpot === null,
+    serie,
   };
 }
 
@@ -242,41 +308,107 @@ export function rendementLocatif({
 export function simulationSCPI({
   montant, fraisEntree = 0.1, td = 0.06, revalo = 0.005, annees = 10,
   delaiJouissanceMois = 4, tmi = 0.3, frontalier = false, reinvestir = false,
+  fraisGestion = 0.12, partEtranger = 0, impotEtranger = 0.15,
+  credit = null, // { montant, taux, annees, assurance (taux annuel sur capital initial) }
 }) {
   const ps = frontalier ? FISCAL.solidarite : FISCAL.psFonciers;
+  const apport = Math.max(0, montant - (credit ? credit.montant : 0));
+
+  // Échéancier annuel du crédit
+  let crd = credit ? credit.montant : 0;
+  const nMois = credit ? Math.round(credit.annees * 12) : 0;
+  const mens = credit && crd > 0 ? mensualite(crd, credit.taux, nMois) : 0;
+  const assuranceAn = credit ? credit.montant * (credit.assurance || 0) : 0;
+
   let parts = montant; // exprimé en € au prix de souscription initial
-  let cumulNet = 0;
-  let cumulBrut = 0;
+  let cumulNet = 0, cumulCash = 0, cumulImpots = 0, cumulGestion = 0, cumulInterets = 0, reportDeficit = 0;
+  const flux = [-apport];
   const serie = [];
   for (let a = 1; a <= annees; a++) {
     const prix = Math.pow(1 + revalo, a - 1);
     const mois = a === 1 ? Math.max(0, 12 - delaiJouissanceMois) : 12;
-    const brut = parts * prix * td * (mois / 12);
-    const net = brut * (1 - tmi - ps);
-    cumulBrut += brut;
-    if (reinvestir) parts += net / prix;
-    else cumulNet += net;
-    serie.push({
-      annee: a,
-      brut,
-      net,
-      cumulNet,
-      valeurRetrait: parts * Math.pow(1 + revalo, a) * (1 - fraisEntree),
-    });
+    const brut = parts * prix * td * (mois / 12); // distribution, fiscalité étrangère comprise
+    const gestion = fraisGestion < 1 ? (brut / (1 - fraisGestion)) * fraisGestion : 0;
+
+    // Crédit de l'année
+    let interets = 0, remb = 0, assurance = 0;
+    for (let m = 0; m < 12 && crd > 0.01; m++) {
+      const i = crd * (credit.taux / 12);
+      interets += i;
+      remb += mens;
+      crd = Math.max(0, crd - (mens - i));
+    }
+    if (remb > 0) assurance = assuranceAn;
+
+    // Fiscalité : revenus étrangers imposés à la source, neutralisés en France (crédit d'impôt ou exonération)
+    const brutFR = brut * (1 - partEtranger);
+    const brutETR = brut * partEtranger;
+    const impotETR = brutETR * impotEtranger;
+    // Seule la part des intérêts rattachée aux revenus français est déductible en France.
+    // Le déficit issu des intérêts ne s'impute que sur les revenus fonciers des 10 années suivantes.
+    let base = brutFR - (interets + assurance) * (1 - partEtranger) - reportDeficit;
+    reportDeficit = base < 0 ? -base : 0;
+    base = Math.max(0, base);
+    const ir = base * tmi;
+    const prelev = base * ps;
+    const net = brut - impotETR - ir - prelev;
+    const cash = net - remb - assurance;
+
+    cumulGestion += gestion;
+    cumulImpots += impotETR + ir + prelev;
+    cumulInterets += interets + assurance;
+    if (reinvestir && !credit) parts += net / prix;
+    else { cumulNet += net; cumulCash += cash; }
+
+    const valeurRetrait = parts * Math.pow(1 + revalo, a) * (1 - fraisEntree);
+    flux.push(reinvestir && !credit ? 0 : cash);
+    serie.push({ annee: a, brut, gestion, impotETR, ir, prelev, net, cash, cumulNet, cumulCash, valeurRetrait, crd, patrimoineNet: valeurRetrait - crd, interets });
   }
   const fin = serie[serie.length - 1];
+  flux[flux.length - 1] += fin.valeurRetrait - fin.crd;
   const totalFinal = fin.valeurRetrait + fin.cumulNet;
+  const pleine = serie[Math.min(1, serie.length - 1)]; // 1re année pleine
+  const annuelBrut = montant * td;
   return {
     serie,
-    revenuMensuelBrut: (montant * td) / 12,
-    revenuMensuelNet: ((montant * td) / 12) * (1 - tmi - ps),
+    apport,
+    mensualite: mens,
+    assuranceMensuelle: assuranceAn / 12,
+    revenuMensuelBrut: annuelBrut / 12,
+    revenuMensuelNet: pleine.net / 12,
+    cashflowMensuel: pleine.cash / 12,
+    fraisEntreeMontant: montant * fraisEntree,
+    gestionAnnuelle: fraisGestion < 1 ? (annuelBrut / (1 - fraisGestion)) * fraisGestion : 0,
     valeurRetraitInitiale: montant * (1 - fraisEntree),
     valeurRetraitFinale: fin.valeurRetrait,
+    crdFinal: fin.crd,
+    patrimoineNetFinal: fin.valeurRetrait - fin.crd,
     cumulNet: fin.cumulNet,
-    cumulBrut,
-    rendementAnnualise: Math.pow(totalFinal / montant, 1 / annees) - 1,
-    tauxImposition: tmi + ps,
+    cumulCash: fin.cumulCash,
+    cumulImpots,
+    cumulGestion,
+    cumulInterets,
+    // Fiscalité d'une année pleine, ventilée France / étranger
+    fiscalite: {
+      brutFR: annuelBrut * (1 - partEtranger), brutETR: annuelBrut * partEtranger,
+      impotETR: annuelBrut * partEtranger * impotEtranger,
+      irFR: pleine.ir, psFR: pleine.prelev, tauxPS: ps,
+    },
+    tauxImposition: pleine.brut ? (pleine.impotETR + pleine.ir + pleine.prelev) / pleine.brut : 0,
+    rendementAnnualise: credit ? tri(flux) : reinvestir ? Math.pow(fin.valeurRetrait / montant, 1 / annees) - 1 : tri(flux.map((f, k) => (k === 0 ? -montant : f))),
   };
+}
+
+// Taux de rendement interne de flux annuels (flux[0] = mise initiale, négative). Dichotomie.
+export function tri(flux) {
+  const van = (r) => flux.reduce((s, f, k) => s + f / Math.pow(1 + r, k), 0);
+  let bas = -0.99, haut = 1;
+  if (van(bas) * van(haut) > 0) return null;
+  for (let k = 0; k < 100; k++) {
+    const mil = (bas + haut) / 2;
+    if (van(bas) * van(mil) <= 0) haut = mil; else bas = mil;
+  }
+  return (bas + haut) / 2;
 }
 
 /* ============================================================ dividendes */

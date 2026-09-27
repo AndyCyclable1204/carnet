@@ -13,7 +13,8 @@ export function themeGraphiques() {
   C.defaults.font.family = "'Jakarta', system-ui, sans-serif";
   C.defaults.font.size = 12;
   C.defaults.color = '#64748b';
-  C.defaults.animation = mouvementReduit() ? false : { duration: 850, easing: 'easeOutQuart' };
+  if (mouvementReduit()) C.defaults.animation = false;
+  else Object.assign(C.defaults.animation, { duration: 850, easing: 'easeOutQuart' });
   C.defaults.plugins.legend.labels.usePointStyle = true;
   C.defaults.plugins.legend.labels.pointStyle = 'circle';
   C.defaults.plugins.legend.labels.boxWidth = 8;
@@ -32,8 +33,38 @@ export function themeGraphiques() {
 export function graphique(canvas, config) {
   const g = new window.Chart(canvas.getContext('2d'), config);
   graphiques.add(g);
+  // Filet de sécurité : si le graphique naît pendant une transition de page ou dans un
+  // conteneur pas encore dimensionné, il est redessiné une fois l'affichage stabilisé.
+  setTimeout(() => reparer(g), 450);
+  setTimeout(() => reparer(g), 1200);
   return g;
 }
+
+function reparer(g) {
+  if (!graphiques.has(g)) return;
+  if (!g.canvas?.isConnected) { g.destroy(); graphiques.delete(g); return; }
+  const parent = g.canvas.parentElement;
+  if (!parent.clientWidth) return; // onglet masqué : rien à dessiner pour l'instant
+  const mauvaiseTaille = !g.width || !g.height || Math.abs(g.width - parent.clientWidth) > 2 || Math.abs(g.height - parent.clientHeight) > 2;
+  if (mauvaiseTaille) g.resize();
+  if (mauvaiseTaille || !g.chartArea || g.chartArea.width <= 0 || estVide(g.canvas)) g.update('none');
+}
+
+// Vrai si rien n'a été dessiné sur le canvas (échantillonnage d'un pixel sur 97).
+function estVide(canvas) {
+  try {
+    const d = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let i = 3; i < d.length; i += 388) if (d[i]) return false;
+    return true;
+  } catch { return false; }
+}
+
+// Redessine tous les graphiques visibles (après une transition, un retour d'onglet…).
+export function rafraichirGraphiques() {
+  graphiques.forEach(reparer);
+}
+
+document.addEventListener('visibilitychange', () => { if (!document.hidden) rafraichirGraphiques(); });
 
 export function detruireGraphiques() {
   graphiques.forEach((g) => g.destroy());
@@ -77,10 +108,30 @@ export function degrade(canvas, couleur, haut = 0.35) {
 
 /* ------------------------------------------------------------ nombres animés */
 
+// Réduit la police d'un chiffre qui déborderait de sa carte (ex. montants en millions).
+export function ajusterTaille(el) {
+  if (!el) return;
+  el.style.fontSize = '';
+  const largeur = el.clientWidth;
+  if (!largeur || el.scrollWidth <= largeur) return;
+  const taille = parseFloat(getComputedStyle(el).fontSize);
+  el.style.fontSize = `${Math.max(14, Math.floor(taille * (largeur / el.scrollWidth) * 0.97))}px`;
+}
+
+let attenteRedim;
+window.addEventListener('resize', () => {
+  clearTimeout(attenteRedim);
+  attenteRedim = setTimeout(() => document.querySelectorAll('[data-ajuste]').forEach(ajusterTaille), 150);
+});
+
 export function animerNombre(el, valeur, format) {
   if (!el) return;
   const depart = +el.dataset.valeur || 0;
   el.dataset.valeur = valeur;
+  // Taille calculée sur la valeur finale, avant l'animation, pour éviter que le chiffre saute.
+  el.dataset.ajuste = '';
+  el.textContent = format(valeur);
+  ajusterTaille(el);
   if (mouvementReduit() || Math.abs(valeur - depart) < 1) {
     el.textContent = format(valeur);
     return;
@@ -239,7 +290,7 @@ function htmlChamp(c, valeur) {
     return bloc(`<label class="interrupteur"><input type="checkbox" name="${c.cle}" ${v ? 'checked' : ''}><span></span>${c.libelle}</label>`);
   }
   if (c.type === 'select' || c.type === 'devise') {
-    const opts = c.type === 'devise' ? [['EUR', 'Euro (EUR)'], ['CHF', 'Franc suisse (CHF)']] : c.options.map((o) => (Array.isArray(o) ? o : [o, o]));
+    const opts = c.type === 'devise' ? [['EUR', 'Euro (EUR)'], ['CHF', 'Franc suisse (CHF)'], ...(c.usd ? [['USD', 'Dollar US (USD)']] : [])] : c.options.map((o) => (Array.isArray(o) ? o : [o, o]));
     return bloc(`<label>${c.libelle}<select name="${c.cle}">${opts.map(([val, lib]) => `<option value="${esc(val)}" ${String(val) === String(v) ? 'selected' : ''}>${esc(lib)}</option>`).join('')}</select></label>`);
   }
   const type = c.type === 'pct' || c.type === 'number' ? 'number' : c.type;

@@ -1,7 +1,7 @@
 // Toutes les données restent dans le navigateur (localStorage).
 // Aucune donnée personnelle n'est envoyée à un serveur.
 
-import { convertir } from './format.js';
+import { convertir, definirTauxUSD, DEVISES } from './format.js';
 import { etatPret, LPP } from './finance.js';
 
 const CLE = 'gpfs:donnees';
@@ -29,6 +29,7 @@ export function etatInitial() {
       age: 30,
       tauxChange: 0.93,
       tauxChangeLe: null,
+      tauxUSD: 1.17,
       inclurePrevoyance: true,
     },
     biens: [],
@@ -52,13 +53,13 @@ export function etatInitial() {
     lpp: {
       actif: false,
       salaire: 85000,
-      avoir: 30000,
+      avoir: null,
       salaireAssure: null,
       tauxManuel: null,
       partEmployeur: 0.5,
       interet: LPP.tauxInteretMinimal,
       ageRetraite: 65,
-      progression: 0,
+      progression: 0.01,
     },
     pilier3: [],
     historique: [],
@@ -67,6 +68,7 @@ export function etatInitial() {
 }
 
 let etat = charger();
+definirTauxUSD(etat.reglages.tauxUSD);
 const abonnes = new Set();
 
 function charger() {
@@ -110,6 +112,7 @@ export function reglage(fn) {
 }
 
 function enregistrer() {
+  definirTauxUSD(etat.reglages.tauxUSD);
   try {
     localStorage.setItem(CLE, JSON.stringify(etat));
   } catch (e) {
@@ -188,8 +191,17 @@ export function joursDepuisSauvegarde() {
 
 export function valeurEnveloppe(e) {
   if (e.mode !== 'avance') return +e.valeur || 0;
-  const titres = (e.lignes || []).reduce((s, l) => s + (+l.quantite || 0) * (+l.dernierPrix || +l.prixRevient || 0), 0);
+  const titres = (e.lignes || []).reduce((s, l) => s + valeurLigne(l, e.devise).valeur, 0);
   return titres + (+e.especes || 0);
+}
+
+// Valeur et prix de revient d'une ligne, convertis dans la devise de l'enveloppe
+// quand le titre cote dans une autre devise (ex. action US dans un compte en EUR).
+export function valeurLigne(l, deviseEnv = 'EUR') {
+  const q = +l.quantite || 0;
+  const dp = DEVISES.includes(l.devisePrix) ? l.devisePrix : deviseEnv;
+  const conv = (m) => convertir(m, dp, deviseEnv, etat.reglages.tauxChange);
+  return { valeur: conv(q * (+l.dernierPrix || +l.prixRevient || 0)), revient: conv(q * (+l.prixRevient || 0)) };
 }
 
 export function ancienneteAnnees(date) {
@@ -200,7 +212,7 @@ export function ancienneteAnnees(date) {
 export function bilan(e = etat, devise = e.reglages.devise) {
   const t = e.reglages.tauxChange;
   const c = (m, d) => convertir(+m || 0, d || 'EUR', devise, t);
-  const parDevise = { EUR: 0, CHF: 0 };
+  const parDevise = { EUR: 0, CHF: 0, USD: 0 };
   const ajout = (m, d) => (parDevise[d || 'EUR'] += c(m, d));
 
   const immobilier = e.biens.reduce((s, b) => (ajout(b.valeur, b.devise), s + c(b.valeur, b.devise)), 0);

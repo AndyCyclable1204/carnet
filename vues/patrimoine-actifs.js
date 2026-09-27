@@ -1,4 +1,4 @@
-import { lire, modifier, reglage, uid, valeurEnveloppe, ancienneteAnnees } from '../js/store.js';
+import { lire, modifier, reglage, uid, valeurEnveloppe, ancienneteAnnees, valeurLigne } from '../js/store.js';
 import { etatPret, fiscaliteSortie, valeurFuture, FISCAL } from '../js/finance.js';
 import { money, pct, dateFr, dateHeure, esc, convertir } from '../js/format.js';
 import { $, $$, formulaire, toast } from '../js/ui.js';
@@ -117,7 +117,7 @@ const TYPES = ['PEA', 'CTO', 'Assurance-vie', 'PER', 'Livret', 'Compte épargne 
 const champsEnveloppe = [
   { cle: 'nom', libelle: 'Nom', type: 'text', requis: true },
   { cle: 'type', libelle: 'Type', type: 'select', options: TYPES },
-  { cle: 'devise', libelle: 'Devise', type: 'devise' },
+  { cle: 'devise', libelle: 'Devise', type: 'devise', usd: true, aide: 'Les titres cotés dans une autre devise sont convertis au taux du jour.' },
   { cle: 'etablissement', libelle: 'Établissement (facultatif)', type: 'text' },
   { cle: 'valeur', libelle: 'Valeur actuelle', type: 'number', requis: true, visible: (v) => true, aide: 'En mode avancé, la valeur est calculée à partir des lignes.' },
   { cle: 'verses', libelle: 'Total des versements effectués', type: 'number', aide: 'Sert à calculer la plus-value et la fiscalité de sortie.' },
@@ -251,8 +251,7 @@ function carteEnveloppe(x, frontalier) {
       <thead><tr><th>Ligne</th><th class="nb">Qté</th><th class="nb">Cours</th><th class="nb">Valeur</th><th class="nb">+/-</th></tr></thead>
       <tbody>${x.lignes.map((l) => {
         const cours = +l.dernierPrix || +l.prixRevient || 0;
-        const v = (+l.quantite || 0) * cours;
-        const pr = (+l.quantite || 0) * (+l.prixRevient || 0);
+        const { valeur: v, revient: pr } = valeurLigne(l, d);
         const ec = pr ? v - pr : null;
         return `<tr data-modif-ligne="${x.id}:${l.id}" style="cursor:pointer">
           <td><div class="nom-ligne">${esc(l.libelle)}<small>${esc(l.symbole || 'sans symbole')}${l.dernierPrixLe ? ' · ' + dateHeure(l.dernierPrixLe) : l.symbole ? ' · cours non actualisé' : ''}</small></div></td>

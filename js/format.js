@@ -23,12 +23,18 @@ export const dateFr = (d) => (d ? new Date(d).toLocaleDateString('fr-FR') : '—
 export const dateHeure = (d) =>
   d ? new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
 
-// Conversion. taux = nombre de CHF pour 1 EUR.
+// Devises gérées. Conversion par l'euro : taux = CHF pour 1 EUR, tauxUSD = USD pour 1 EUR.
+export const DEVISES = ['EUR', 'CHF', 'USD'];
+let tauxUSD = 1.17;
+export const definirTauxUSD = (x) => { if (x > 0.5 && x < 2.5) tauxUSD = +x; };
+export const lireTauxUSD = () => tauxUSD;
+export const symbole = (d) => ({ EUR: '€', CHF: 'CHF', USD: '$' }[d] || d);
+
 export function convertir(montant, de, vers, taux) {
+  de = de || 'EUR'; vers = vers || 'EUR';
   if (!montant || de === vers) return +montant || 0;
-  if (de === 'EUR' && vers === 'CHF') return montant * taux;
-  if (de === 'CHF' && vers === 'EUR') return montant / taux;
-  return +montant || 0;
+  const enEUR = de === 'CHF' ? montant / taux : de === 'USD' ? montant / tauxUSD : +montant;
+  return vers === 'CHF' ? enEUR * taux : vers === 'USD' ? enEUR * tauxUSD : enEUR;
 }
 
 export const esc = (s) =>

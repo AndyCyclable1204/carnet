@@ -1,5 +1,5 @@
 import { classement, configure, viderCache } from '../js/marche.js';
-import { SCPI, SCPI_SOURCE } from '../js/scpi.js';
+import { SCPI, SCPI_SOURCE, horsFrance } from '../js/scpi.js';
 import { money, pct, pctSigne, dateHeure, esc, nombre } from '../js/format.js';
 import { $, $$, htmlOnglets, placerIndicateur, cascade } from '../js/ui.js';
 import { icones } from '../js/icones.js';
@@ -78,9 +78,13 @@ const CONFIG = {
       { cle: 'prix', titre: 'Cours', nb: true, rendu: (x) => `${nombre(x.prix, 2)} <small>${esc(x.devise || '')}</small>` },
       { cle: 'dividende', titre: 'Dividende 12 mois', nb: true, rendu: (x) => `${nombre(x.dividende, 2)} <small>${esc(x.devise || '')}</small><br><small>${x.versements} versement${x.versements > 1 ? 's' : ''}</small>` },
       { cle: 'rendement', titre: 'Rendement', nb: true, rendu: (x, max) => barre(x.rendement, max, false) },
+      { cle: 'perfCours', titre: 'Cours 1 an', nb: true, rendu: (x) => perf(x.perf1a) },
+      { cle: 'total', titre: 'Total 1 an', nb: true, rendu: (x) => (x.perf1a == null ? '—' : `<b>${perf(x.perf1a + x.rendement)}</b>`) },
     ],
+    cleBarre: 'rendement',
+    enrichir: (x) => ({ ...x, perfCours: x.perf1a ?? null, total: x.perf1a == null ? null : x.perf1a + x.rendement }),
     filtrer: (x, f) => f === 'tous' || (f === 'pea' && x.pea) || (f === 'ch' && x.pays === 'CH'),
-    note: "Un rendement très élevé signale parfois un cours en forte baisse ou un dividende exceptionnel non reconductible. Les dividendes suisses subissent une retenue à la source de 35 %, partiellement récupérable.",
+    note: "Total 1 an = variation du cours sur 12 mois + rendement du dividende (performance globale, avant impôts). Un rendement très élevé signale parfois un cours en forte baisse ou un dividende exceptionnel non reconductible. Les dividendes suisses subissent une retenue à la source de 35 %, partiellement récupérable.",
   },
 };
 
@@ -125,10 +129,10 @@ async function rendreMarche(el, type, forcer) {
 
   const dessiner = () => {
     const tri = etatTri[type];
-    let liste = donnees.lignes.filter((x) => cfg.filtrer(x, filtres[type]) && x[tri.cle] != null);
+    let liste = donnees.lignes.map(cfg.enrichir || ((x) => x)).filter((x) => cfg.filtrer(x, filtres[type]) && x[tri.cle] != null);
     liste.sort((a, b) => (typeof a[tri.cle] === 'string' ? a[tri.cle].localeCompare(b[tri.cle]) : a[tri.cle] - b[tri.cle]) * tri.sens);
     liste = liste.slice(0, 20);
-    const max = Math.max(...liste.map((x) => Math.abs(x[cfg.colonnes.at(-1).cle] || 0)), 0.0001);
+    const max = Math.max(...liste.map((x) => Math.abs(x[cfg.cleBarre || cfg.colonnes.at(-1).cle] || 0)), 0.0001);
     $('#corps', el).innerHTML = liste.length ? tableau(cfg.colonnes, liste, tri, max) : '<div class="vide"><p>Aucune donnée disponible pour ce filtre.</p></div>';
     cascade($('#corps', el));
   };
@@ -153,7 +157,7 @@ async function rendreMarche(el, type, forcer) {
 
 function tableau(colonnes, liste, tri, max) {
   return `<div class="table-cadre"><table>
-    <thead><tr><th>#</th>${colonnes.map((c) => `<th class="c-${c.cle} ${c.nb ? 'nb' : ''} triable ${tri.cle === c.cle ? 'tri-actif' : ''}" data-tri="${c.cle}">${c.titre}${tri.cle === c.cle ? (tri.sens < 0 ? ' ↓' : ' ↑') : ''}</th>`).join('')}</tr></thead>
+    <thead><tr><th>#</th>${colonnes.map((c) => (c.titre ? `<th class="c-${c.cle} ${c.nb ? 'nb' : ''} triable ${tri.cle === c.cle ? 'tri-actif' : ''}" data-tri="${c.cle}">${c.titre}${tri.cle === c.cle ? (tri.sens < 0 ? ' ↓' : ' ↑') : ''}</th>` : `<th class="c-${c.cle}"></th>`)).join('')}</tr></thead>
     <tbody data-cascade>${liste.map((x, i) => `<tr><td><span class="rang">${i + 1}</span></td>${colonnes.map((c) => `<td class="c-${c.cle} ${c.nb ? 'nb' : ''}">${c.rendu(x, max)}</td>`).join('')}</tr>`).join('')}</tbody>
   </table></div>`;
 }
@@ -167,14 +171,17 @@ function rendreSCPI(el) {
     colonnes: [
       { cle: 'nom', titre: 'SCPI', rendu: (x) => `<div class="nom-ligne">${esc(x.nom)}<small>${esc(x.gerant)}</small></div>` },
       { cle: 'zone', titre: 'Zone', rendu: (x) => `<small>${esc(x.zone)}</small>` },
+      { cle: 'etr', titre: 'Hors France', nb: true, rendu: (x) => `<span class="badge ${horsFrance(x) ? 'violet' : ''}">${pct(x.etr ?? 0, 0)}</span>` },
       { cle: 'frais', titre: "Frais d'entrée", nb: true, rendu: (x) => (x.frais === 0 ? '<span class="badge vert">Sans frais</span>' : pct(x.frais, 1)) },
+      { cle: 'fg', titre: 'Frais de gestion', nb: true, rendu: (x) => (x.fg != null ? pct(x.fg, 1) : '—') },
       { cle: 'prix', titre: 'Prix de part', nb: true, rendu: (x) => (x.prix ? money(x.prix, 'EUR', x.prix < 10 ? 2 : 0) : '—') },
       { cle: 'td', titre: `TD ${SCPI_SOURCE.annee}`, nb: true, rendu: (x, max) => barre(x.td, max, false) },
+      { cle: 'simuler', titre: '', rendu: (x) => `<button class="btn mini discret" data-simuler="${esc(x.nom)}" title="Simuler ${esc(x.nom)}">Simuler</button>` },
     ],
   };
   const dessiner = () => {
     const tri = etatTri.scpi;
-    let liste = SCPI.filter((x) => filtres.scpi === 'tous' || (filtres.scpi === 'sansfrais' && x.frais === 0) || (filtres.scpi === 'etablies' && x.creation && x.creation <= 2022));
+    let liste = SCPI.filter((x) => filtres.scpi === 'tous' || (filtres.scpi === 'sansfrais' && x.frais === 0) || (filtres.scpi === 'etablies' && x.creation && x.creation <= 2022) || (filtres.scpi === 'france' && !horsFrance(x)) || (filtres.scpi === 'etranger' && horsFrance(x)));
     liste = [...liste].sort((a, b) => ((a[tri.cle] ?? -1) > (b[tri.cle] ?? -1) ? 1 : -1) * tri.sens).slice(0, 20);
     const max = Math.max(...liste.map((x) => x.td));
     $('#corps', el).innerHTML = tableau(cfg.colonnes, liste, tri, max);
@@ -186,14 +193,20 @@ function rendreSCPI(el) {
         <small>Le taux de distribution d'une SCPI est publié une fois par an : ce classement est mis à jour chaque année, pas en continu.</small></div>
         <a class="btn mini discret" href="#/simulateurs/scpi">Simuler un investissement</a></div>
       <div class="pile" style="margin-bottom:1rem">
-        ${[['tous', 'Toutes'], ['sansfrais', 'Sans frais d’entrée'], ['etablies', 'Créées avant 2023']].map(([v, l]) => `<button class="btn mini ${filtres.scpi === v ? '' : 'discret'}" data-filtre="${v}">${l}</button>`).join('')}
+        ${[['tous', 'Toutes'], ['france', 'France'], ['etranger', 'Hors France'], ['sansfrais', 'Sans frais d’entrée'], ['etablies', 'Créées avant 2023']].map(([v, l]) => `<button class="btn mini ${filtres.scpi === v ? '' : 'discret'}" data-filtre="${v}">${l}</button>`).join('')}
       </div>
       <div id="corps"></div>
       <div class="encart attention" style="margin-top:1rem">${icones.info.replace('<svg', '<svg width="18" height="18" style="flex:none"')}
         <p>Beaucoup des SCPI en tête ont moins de 3 ans : leur taux est souvent gonflé par le délai de jouissance et des acquisitions récentes à prix bas. Un taux se juge sur plusieurs années, avec le taux d'occupation et l'évolution du prix de part.</p></div>
-      <small style="display:block;margin-top:.8rem">Source : ${SCPI_SOURCE.source}, données ${SCPI_SOURCE.annee}.</small>
+      <small style="display:block;margin-top:.8rem">« Hors France » = part des revenus de source étrangère : imposés dans le pays de l'immeuble, sans prélèvements sociaux en France (voir le détail dans le simulateur). France = majorité des revenus en France. Frais de gestion en % TTC des loyers, déjà déduits du TD. Répartitions et frais de gestion indicatifs : ils évoluent avec les acquisitions, le DIC et le dernier bulletin font foi.<br>Source : ${SCPI_SOURCE.source}, données ${SCPI_SOURCE.annee}.</small>
     </div>`;
   el.addEventListener('click', (e) => {
+    const sim = e.target.closest('[data-simuler]');
+    if (sim) {
+      sessionStorage.setItem('scpi-choisie', sim.dataset.simuler);
+      location.hash = '#/simulateurs/scpi';
+      return;
+    }
     const f = e.target.closest('[data-filtre]');
     if (f) {
       filtres.scpi = f.dataset.filtre;

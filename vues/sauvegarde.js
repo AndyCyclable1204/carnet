@@ -25,7 +25,7 @@ export function rendre(vue) {
         ${stat('Dernière sauvegarde', j === null ? 'Jamais' : j === 0 ? "Aujourd'hui" : `Il y a ${j} j`, e.derniereSauvegarde ? dateFr(e.derniereSauvegarde) : 'à faire', j === null || j > 30)}
         ${stat('Éléments suivis', nombre(nb), `${e.historique.length} point${e.historique.length > 1 ? 's' : ''} d'historique`)}
         ${stat('Taille des données', `${nombre(taille / 1024, 1)} ko`, 'dans ce navigateur')}
-        ${stat('Taux EUR/CHF', nombre(e.reglages.tauxChange, 4), e.reglages.tauxChangeLe ? dateHeure(e.reglages.tauxChangeLe) : 'non actualisé')}
+        ${stat('1 € vaut', `${nombre(e.reglages.tauxChange, 4)} CHF · ${nombre(e.reglages.tauxUSD, 4)} $`, e.reglages.tauxChangeLe ? dateHeure(e.reglages.tauxChangeLe) : 'non actualisé')}
       </div>
     </div>
 
@@ -49,9 +49,10 @@ export function rendre(vue) {
 
     <div class="carte" style="margin-top:1rem">
       <div class="carte-tete"><h3>Réglages</h3></div>
-      <div class="grille g3">
+      <div class="grille" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr))">
         <div class="champ"><label>Votre âge<span class="saisie avec-suffixe"><input type="number" id="age" value="${e.reglages.age}" min="16" max="80"><i>ans</i></span></label><small>Sert au calcul LPP et aux projections de prévoyance.</small></div>
         <div class="champ"><label>Taux EUR/CHF${configure() ? ' (actualisé automatiquement)' : ''}<span class="saisie avec-suffixe"><input type="number" id="taux" step="0.0001" value="${e.reglages.tauxChange}"><i>CHF</i></span></label><small>Nombre de francs pour 1 euro.</small></div>
+        <div class="champ"><label>Taux EUR/USD${configure() ? ' (actualisé automatiquement)' : ''}<span class="saisie avec-suffixe"><input type="number" id="tauxUSD" step="0.0001" value="${e.reglages.tauxUSD}"><i>USD</i></span></label><small>Nombre de dollars pour 1 euro.</small></div>
         <div class="champ" style="display:flex;flex-direction:column;gap:.8rem;justify-content:center">
           <label class="interrupteur"><input type="checkbox" id="front" ${e.reglages.frontalier ? 'checked' : ''}><span></span>Frontalier exonéré de CSG/CRDS</label>
           <label class="interrupteur"><input type="checkbox" id="prev" ${e.reglages.inclurePrevoyance ? 'checked' : ''}><span></span>Inclure la prévoyance suisse dans le patrimoine net</label>
@@ -112,6 +113,7 @@ export function rendre(vue) {
   });
 
   $('#age', vue).addEventListener('change', (ev) => { const v = +ev.target.value; if (v >= 16 && v <= 80) reglage((r) => (r.age = v)); });
+  $('#tauxUSD', vue).addEventListener('change', (ev) => { const v = +ev.target.value; if (v > 0.5 && v < 2.5) { reglage((r) => { r.tauxUSD = v; }); toast('Taux enregistré'); } });
   $('#taux', vue).addEventListener('change', (ev) => { const v = +ev.target.value; if (v > 0.5 && v < 2) { reglage((r) => { r.tauxChange = v; r.tauxChangeLe = null; }); toast('Taux enregistré'); } });
   $('#front', vue).addEventListener('change', (ev) => reglage((r) => (r.frontalier = ev.target.checked)));
   $('#prev', vue).addEventListener('change', (ev) => reglage((r) => (r.inclurePrevoyance = ev.target.checked)));
