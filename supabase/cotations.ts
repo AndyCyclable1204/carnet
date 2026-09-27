@@ -15,7 +15,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 // Sites autorisés à appeler la fonction. Si vous prenez un nom de domaine,
 // ajoutez-le ici (ex. 'https://www.mondomaine.fr') puis redéployez.
-const ORIGINES = ['https://carnet-livid-one.vercel.app'];
+const ORIGINES = ['https://gestion-patrimoine-finance.vercel.app', 'https://carnet-livid-one.vercel.app'];
 const origineAutorisee = (o: string | null) =>
   !!o && (ORIGINES.includes(o) ||
     /^https:\/\/carnet-[a-z0-9-]+\.vercel\.app$/.test(o) || // aperçus Vercel du projet
