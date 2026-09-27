@@ -28,6 +28,8 @@ async function appel(corps) {
       signal: ctrl.signal,
     });
     if (r.status === 401) throw new Error('Accès refusé : désactivez « Verify JWT » sur la fonction cotations.');
+    if (r.status === 429) throw new Error('Trop de requêtes : réessayez dans une minute.');
+    if (r.status === 403) throw new Error('Ce site n\'est pas autorisé à utiliser le service de cotation (liste ORIGINES de la fonction).');
     if (!r.ok) throw new Error(`Service de cotation indisponible (${r.status}).`);
     const d = await r.json();
     if (d.erreur) throw new Error(d.erreur);

@@ -5,14 +5,14 @@ export function rendre(vue) {
     <h1 style="font-size:clamp(1.6rem,4vw,2.2rem);margin-bottom:1.2rem">Mentions légales et confidentialité</h1>
 
     <h3>Éditeur</h3>
-    <p class="discret">Site personnel non commercial, édité à titre privé. Contact : <a href="mailto:CONTACT@EXEMPLE.FR">CONTACT@EXEMPLE.FR</a>.</p>
+    <p class="discret">Site personnel non commercial, édité à titre privé par un particulier. Conformément à l'article 6 de la loi pour la confiance dans l'économie numérique, l'identité de l'éditeur a été communiquée à l'hébergeur. Contact : <a href="mailto:gestion.patrimoine.suisse@proton.me">gestion.patrimoine.suisse@proton.me</a> (questions, retours, signalement d'erreur).</p>
 
     <h3>Hébergement</h3>
     <p class="discret">Vercel Inc., 440 N Barranca Ave #4133, Covina, CA 91723, États-Unis — vercel.com.</p>
 
     <h3>Vos données</h3>
     <p class="discret">Aucune donnée personnelle n'est collectée ni transmise. Tout ce que vous saisissez (biens, crédits, placements, prévoyance) est enregistré uniquement dans le stockage local de votre navigateur, sur votre appareil. Le site n'utilise ni compte, ni cookie, ni outil de mesure d'audience, ni publicité. Les polices et la bibliothèque de graphiques sont hébergées avec le site : aucun appel à un service tiers n'est fait pour les afficher.</p>
-    <p class="discret">Pour afficher les cours, le taux EUR/CHF et les classements, le site interroge un service de cotation (Supabase, fonction « cotations ») qui ne reçoit que des symboles boursiers, jamais vos montants ni votre identité. Ce service relaie les données publiques de Yahoo Finance.</p>
+    <p class="discret">Pour afficher les cours, le taux EUR/CHF et les classements, le site interroge un service de cotation (Supabase, fonction « cotations ») qui ne reçoit que des symboles boursiers, jamais vos montants ni votre identité. Ce service relaie les données publiques de Yahoo Finance. Pour le protéger des abus, il compte les requêtes par minute à l'aide d'une empreinte chiffrée et irréversible de votre adresse IP (jamais l'adresse elle-même), effacée sous 24 heures. L'hébergeur conserve par ailleurs des journaux techniques de connexion.</p>
     <p class="discret">Vous pouvez tout effacer à tout moment depuis la page Sauvegarde, ou en vidant les données du site dans votre navigateur.</p>
 
     <h3>Avertissement</h3>

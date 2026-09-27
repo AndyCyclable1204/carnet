@@ -11,11 +11,47 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
+/* ------------------------------------------------------------ protections */
+
+// Sites autorisés à appeler la fonction. Si vous prenez un nom de domaine,
+// ajoutez-le ici (ex. 'https://www.mondomaine.fr') puis redéployez.
+const ORIGINES = ['https://carnet-livid-one.vercel.app'];
+const origineAutorisee = (o: string | null) =>
+  !!o && (ORIGINES.includes(o) ||
+    /^https:\/\/carnet-[a-z0-9-]+\.vercel\.app$/.test(o) || // aperçus Vercel du projet
+    /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o)); // tests en local
+
+// Limites de débit : par visiteur (adresse IP hachée) et au total, par minute.
+const LIMITE_VISITEUR = 60;
+const LIMITE_TOTALE = 1500;
+
+const enTetes = (origine: string) => ({
+  'Access-Control-Allow-Origin': origine,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+  'Vary': 'Origin',
+});
+
+async function empreinte(texte: string) {
+  const sel = Deno.env.get('SUPABASE_URL') || 'gpfs';
+  const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sel + texte));
+  return Array.from(new Uint8Array(h)).slice(0, 12).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Vrai si la requête reste sous les limites. En cas d'erreur (table absente), on laisse passer.
+async function sousLaLimite(req: Request) {
+  try {
+    const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'inconnue';
+    const [visiteur, total] = await Promise.all([
+      admin.rpc('incrementer_limite', { p_cle: 'ip:' + (await empreinte(ip)), p_max: LIMITE_VISITEUR, p_fenetre_s: 60 }),
+      admin.rpc('incrementer_limite', { p_cle: 'total', p_max: LIMITE_TOTALE, p_fenetre_s: 60 }),
+    ]);
+    if (visiteur.error || total.error) return true;
+    return visiteur.data !== false && total.data !== false;
+  } catch {
+    return true;
+  }
+}
 const CACHE_COURS_MIN = 15;
 const CACHE_CLASSEMENT_MIN = 30;
 const SYMBOLE_VALIDE = /^[A-Z0-9.\-=^]{1,20}$/;
@@ -228,9 +264,14 @@ async function actionClassement(type: string) {
 /* ------------------------------------------------------------ point d'entrée */
 
 Deno.serve(async (req) => {
+  const origine = req.headers.get('origin');
+  if (!origineAutorisee(origine)) return new Response('Origine non autorisée', { status: 403 });
+  const CORS = enTetes(origine!);
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   const repondre = (corps: unknown, statut = 200) =>
     new Response(JSON.stringify(corps), { status: statut, headers: { ...CORS, 'Content-Type': 'application/json' } });
+  if (req.method !== 'POST') return repondre({ erreur: 'Méthode non autorisée' }, 405);
+  if (!(await sousLaLimite(req))) return repondre({ erreur: 'Trop de requêtes : réessayez dans une minute.' }, 429);
   try {
     const corps = await req.json().catch(() => ({}));
     const action = corps.action || (corps.symboles ? 'cours' : '');
