@@ -1,0 +1,21 @@
+# Garde le projet Supabase actif (le plan gratuit se met en pause après 7 jours sans activité).
+# Appelle la fonction « cotations » chaque jour ; aucune donnée personnelle n'est envoyée.
+name: Maintien Supabase
+
+on:
+  schedule:
+    - cron: '17 6 * * *'   # tous les jours vers 8 h (heure de Genève en été)
+  workflow_dispatch:       # bouton « Run workflow » pour tester à la main
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Appel de la fonction cotations
+        run: |
+          curl -fsS --retry 3 --retry-delay 20 -X POST \
+            "https://xhfqijsembtpqougdely.supabase.co/functions/v1/cotations" \
+            -H "Content-Type: application/json" \
+            -H "apikey: sb_publishable_bkzDDpM0sEoi-OFhsvTqZg_fYis2ult" \
+            -H "Origin: https://gestion-patrimoine-finance.vercel.app" \
+            -d '{"action":"change"}'
