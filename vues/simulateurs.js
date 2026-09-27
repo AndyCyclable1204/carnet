@@ -4,7 +4,7 @@ import {
 } from '../js/finance.js';
 import { money, pct, nombre, esc, COULEURS, convertir } from '../js/format.js';
 import { SCPI } from '../js/scpi.js';
-import { lire } from '../js/store.js';
+import { lire, bilan } from '../js/store.js';
 import {
   $, $$, htmlOnglets, placerIndicateur, graphique, detruireGraphiques, animerNombre, cascade,
   echelleMontant, echelleX, remplissage, degrade,
@@ -158,16 +158,28 @@ const ansFmt = (v) => v + (v > 1 ? ' ans' : ' an');
 /* ------------------------------------------------------------ projection */
 
 function simProjection(el, s) {
-  const dev = lire().reglages.devise;
+  const e = lire();
+  const dev = e.reglages.devise;
   const f = (v) => money(v, dev);
   const u = dev === 'CHF' ? 'CHF' : '€';
+  // Point de départ : le patrimoine à jour de la synthèse (Mon patrimoine).
+  const b = bilan(e, dev);
+  const avecPrev = e.reglages.inclurePrevoyance && b.prevoyance > 0;
+  const base = {
+    cap: Math.round(b.placements + (avecPrev ? b.prevoyance : 0)),
+    ep: Math.round(b.versementsMensuels / 50) * 50,
+    rd: Math.round((b.placements ? b.rendementMoyen : 0.06) * 200) / 2,
+    eq: Math.round(b.equiteImmo),
+    am: Math.round(b.amortiMensuel),
+  };
+  const source = 'Repris de votre synthèse (Mon patrimoine).';
   monter(el, s, [
-    { id: 'cap', type: 'range', libelle: 'Capital déjà investi', min: 0, max: 500000, pas: 1000, valeur: 40000, format: f },
-    { id: 'ep', type: 'range', libelle: 'Épargne mensuelle', min: 0, max: 6000, pas: 50, valeur: 500, format: (v) => f(v) + '/mois' },
-    { id: 'rd', type: 'range', libelle: 'Rendement annuel', min: 0, max: 12, pas: 0.5, valeur: 6, format: pctFmt },
+    { id: 'cap', type: 'number', libelle: avecPrev ? 'Capital placé (placements + prévoyance)' : 'Capital déjà investi', valeur: base.cap, suffixe: u, aide: source },
+    { id: 'ep', type: 'range', libelle: 'Épargne mensuelle', min: 0, max: Math.max(6000, Math.ceil(base.ep / 1000) * 1000), pas: 50, valeur: base.ep, format: (v) => f(v) + '/mois' },
+    { id: 'rd', type: 'range', libelle: 'Rendement annuel', min: 0, max: 12, pas: 0.5, valeur: Math.min(12, Math.max(0, base.rd)), format: pctFmt, aide: b.placements ? 'Moyenne pondérée de vos enveloppes.' : '' },
     { id: 'an', type: 'range', libelle: 'Horizon', min: 1, max: 40, valeur: 15, format: ansFmt },
-    { id: 'eq', type: 'number', libelle: 'Équité immobilière actuelle', valeur: 0, suffixe: u },
-    { id: 'am', type: 'number', libelle: 'Capital de crédit amorti par mois', valeur: 0, suffixe: u, aide: 'La part capital de vos mensualités.' },
+    { id: 'eq', type: 'number', libelle: 'Équité immobilière actuelle', valeur: base.eq, suffixe: u, aide: 'Valeur des biens moins capital restant dû.' },
+    { id: 'am', type: 'number', libelle: 'Capital de crédit amorti par mois', valeur: base.am, suffixe: u, aide: 'La part capital de vos mensualités.' },
   ],
   tuiles(resultat('Patrimoine projeté', 'rTot', '', true), resultat('Versé de votre poche', 'rVer'), resultat('Généré par les marchés', 'rGen')) + cadre('g'),
   (() => {
@@ -175,7 +187,7 @@ function simProjection(el, s) {
     return (v) => {
       const r = projection({ capitalInitial: v.cap, epargneMensuelle: v.ep, rendement: v.rd / 100, annees: v.an, amortiMensuel: v.am, equiteImmo: v.eq });
       animerNombre($('#rTot', el), r.total, f);
-      $('#rTot-s', el).textContent = `dans ${ansFmt(v.an)}`;
+      $('#rTot-s', el).textContent = `dans ${ansFmt(v.an)}, en partant de ${f(v.cap + v.eq)} aujourd'hui`;
       animerNombre($('#rVer', el), v.cap + v.ep * 12 * v.an, f);
       animerNombre($('#rGen', el), r.rendementGenere, f);
       dessiner((c) => ({
