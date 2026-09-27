@@ -1,5 +1,5 @@
 import { lire, reglage, abonner, joursDepuisSauvegarde, exporter, demanderPersistance } from './js/store.js';
-import { themeGraphiques, detruireGraphiques, toast, $, $$ } from './js/ui.js';
+import { themeGraphiques, detruireGraphiques, rafraichirGraphiques, toast, $, $$ } from './js/ui.js';
 import { icones, logo } from './js/icones.js';
 import { change, configure } from './js/marche.js';
 import { nombre, dateHeure } from './js/format.js';
@@ -36,7 +36,7 @@ function majEntete() {
   bascule.dataset.devise = r.devise;
   $$('button', bascule).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.devise === r.devise)));
   $('#tauxPill').innerHTML = `1 € = <b>${nombre(r.tauxChange, 4)} CHF</b>`;
-  $('#tauxPill').title = r.tauxChangeLe ? `Taux du ${dateHeure(r.tauxChangeLe)}` : 'Taux par défaut, non actualisé';
+  $('#tauxPill').title = (r.tauxChangeLe ? `Taux du ${dateHeure(r.tauxChangeLe)}` : 'Taux par défaut, non actualisé') + ` · 1 € = ${nombre(r.tauxUSD, 4)} USD`;
 }
 
 $('#bascule').addEventListener('click', (e) => {
@@ -110,7 +110,8 @@ function rendre(forcer = false) {
 
   window.scrollTo({ top: 0, behavior: 'instant' });
   if (document.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    document.startViewTransition(afficher);
+    const transition = document.startViewTransition(afficher);
+    transition.finished.finally(rafraichirGraphiques);
   } else {
     afficher();
     vue.classList.remove('vue-entre');
@@ -127,12 +128,18 @@ abonner(() => { majBandeau(); majEntete(); });
 async function actualiserTaux() {
   if (!configure()) return;
   try {
-    const { taux, maj } = await change();
+    const { taux, tauxUSD, maj } = await change();
     if (taux > 0.5 && taux < 2) {
-      const ancien = lire().reglages.tauxChange;
-      reglage((r) => { r.tauxChange = taux; r.tauxChangeLe = maj || new Date().toISOString(); });
+      const r0 = lire().reglages;
+      const ancien = r0.tauxChange;
+      const ancienUSD = r0.tauxUSD;
+      reglage((r) => {
+        r.tauxChange = taux;
+        r.tauxChangeLe = maj || new Date().toISOString();
+        if (tauxUSD > 0.5 && tauxUSD < 2.5) r.tauxUSD = tauxUSD;
+      });
       majEntete();
-      if (Math.abs(ancien - taux) > 0.0005) rendre(true);
+      if (Math.abs(ancien - taux) > 0.0005 || Math.abs(ancienUSD - (lire().reglages.tauxUSD)) > 0.0005) rendre(true);
     }
   } catch (e) {
     console.warn('Taux EUR/CHF non actualisé :', e.message);

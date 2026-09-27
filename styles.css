@@ -464,8 +464,26 @@ tr:nth-child(3) .rang { background: linear-gradient(135deg, #f0b27a, #b9770e); c
 /* Classements sur mobile : on garde nom, rang et indicateur principal */
 td.c-nom { min-width: 150px; }
 @media (max-width: 640px) {
-  .c-pea, .c-prix, .c-perf1m, .c-perfYtd, .c-zone, .c-dividende { display: none; }
+  .c-pea, .c-prix, .c-perf1m, .c-perfYtd, .c-zone, .c-dividende, .c-total, .c-fg, .c-etr { display: none; }
   table { font-size: 0.84rem; }
   th, td { padding-left: 0.4rem; padding-right: 0.4rem; }
   .barre-mini { min-width: 36px; }
 }
+.devise.usd { background: #ece9fb; color: #5b4fc4; }
+.estimer { margin: -0.5rem 0 1rem; }
+#formEstimer { margin-top: 0.5rem; padding: 0.8rem; border-radius: var(--rayon-m); background: var(--neige, #f8fafc); border: 1px solid var(--trait); }
+#formEstimer small { display: block; margin-top: 0.6rem; }
+
+/* Grands montants : sur une ligne, réduits automatiquement s'ils débordent */
+.grand-chiffre, .kpi .valeur { white-space: nowrap; overflow: hidden; max-width: 100%; }
+.kpi { min-width: 0; }
+
+/* Détails chiffrés (frais, fiscalité) */
+.ligne-detail { padding: 0.55rem 0; border-bottom: 1px solid var(--trait-2); font-size: 0.9rem; gap: 1rem; }
+.ligne-detail b { white-space: nowrap; }
+.ligne-detail.total { border-bottom: 0; border-top: 1px solid var(--trait); margin-top: 0.3rem; font-weight: 650; }
+.bloc-aide { display: block; margin: 0.2rem 0 0.5rem; line-height: 1.45; }
+.table-fisc td, .table-fisc th { padding: 0.5rem 0.45rem; }
+.table-fisc tr.total td { font-weight: 700; border-top: 1px solid var(--trait); }
+.table-fisc small { color: var(--encre-3); font-weight: 450; }
+.badge.violet { background: #ece9fb; color: #5b4fc4; }
