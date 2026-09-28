@@ -127,7 +127,21 @@ function rendre(forcer = false) {
   }
 }
 
-window.addEventListener('hashchange', () => rendre());
+/* ------------------------------------------------------------ mesure d'audience */
+
+// Le site navigue par « #/… » : Vercel Web Analytics ne voit que « / ».
+// On lui signale donc chaque page vue avec son vrai chemin (ex. /simulateurs/scpi).
+window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+let dernierePage = null;
+function mesurerPage() {
+  const chemin = '/' + location.hash.replace(/^#\/?/, '').replace(/\/$/, '');
+  if (chemin === dernierePage) return;
+  dernierePage = chemin;
+  const [nom = ''] = chemin.slice(1).split('/');
+  window.va('pageview', { route: '/' + (ROUTES[nom] ? nom : ''), path: chemin });
+}
+
+window.addEventListener('hashchange', () => { rendre(); mesurerPage(); });
 abonner(() => { majBandeau(); majEntete(); });
 
 /* ------------------------------------------------------------ taux de change */
@@ -158,5 +172,6 @@ async function actualiserTaux() {
 majEntete();
 majBandeau();
 rendre();
+mesurerPage();
 actualiserTaux();
 demanderPersistance();
