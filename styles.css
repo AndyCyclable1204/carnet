@@ -487,3 +487,34 @@ td.c-nom { min-width: 150px; }
 .table-fisc tr.total td { font-weight: 700; border-top: 1px solid var(--trait); }
 .table-fisc small { color: var(--encre-3); font-weight: 450; }
 .badge.violet { background: #ece9fb; color: #5b4fc4; }
+
+/* Choix de la langue */
+.choix-langue {
+  appearance: none; -webkit-appearance: none;
+  font: inherit; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.02em; color: var(--encre-2);
+  background: var(--neige, #f1f5f9) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2364748b' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 0.5rem center / 9px;
+  border: 1px solid var(--trait); border-radius: 999px;
+  padding: 0.38rem 1.45rem 0.38rem 0.7rem; cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+.choix-langue:hover { border-color: var(--lac); }
+.choix-langue:focus-visible { outline: 2px solid var(--lac); outline-offset: 2px; }
+.choix-langue { flex-shrink: 0; min-width: 3.6rem; }
+@media (max-width: 640px) { .choix-langue { padding: 0.34rem 1.3rem 0.34rem 0.55rem; background-position: right 0.4rem center; } }
+@media (max-width: 480px) {
+  .entete-outils { gap: 0.4rem; }
+  .logo span b { font-size: 0.88rem; line-height: 1.15; }
+  .logo span small { font-size: 0.7rem; }
+  .choix-langue { min-width: 0; padding: 0.32rem 1.15rem 0.32rem 0.5rem; font-size: 0.72rem; background-position: right 0.35rem center; }
+  .bascule-devise button { padding-inline: 0.55rem; }
+}
+@media (max-width: 480px) {
+  .logo { min-width: 0; flex: 1 1 auto; }
+  .logo span { min-width: 0; }
+  .entete-outils { flex-shrink: 0; }
+}
+@media (max-width: 420px) {
+  .logo span small { display: none; }
+}
+/* Le sélecteur de langue garde sa taille naturelle (le style général des listes le met en pleine largeur). */
+.entete .choix-langue { width: auto; }

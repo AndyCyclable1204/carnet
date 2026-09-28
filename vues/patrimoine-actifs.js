@@ -1,6 +1,6 @@
 import { lire, modifier, reglage, uid, valeurEnveloppe, ancienneteAnnees, valeurLigne } from '../js/store.js';
 import { etatPret, fiscaliteSortie, valeurFuture, FISCAL } from '../js/finance.js';
-import { money, pct, dateFr, dateHeure, esc, convertir } from '../js/format.js';
+import { money, pct, dateFr, dateHeure, esc, convertir, moisAnnee } from '../js/format.js';
 import { $, $$, formulaire, toast } from '../js/ui.js';
 import { icones } from '../js/icones.js';
 import { cours, configure } from '../js/marche.js';
@@ -63,7 +63,7 @@ export function panneauImmobilier(el, rafraichir) {
             ${ico(icones.credit, 'var(--lac-clair)', 'var(--lac)')}
             <div><div class="titre">${esc(p.nom)} ${badge(p.devise)}</div>
               <div class="detail">${pct(p.tauxAnnuel)} · ${f(p.c.mensualite, p.devise)}/mois dont ${f(p.c.amortiMensuel, p.devise)} de capital${bien ? ` · ${esc(bien.nom)}` : ''}</div>
-              <div class="detail">Fin ${p.c.moisRestants ? fin.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) : 'atteinte'}${p.c.estime ? ` · estimé depuis le ${dateFr(p.dateReleve)}` : ''}</div></div>
+              <div class="detail">Fin ${p.c.moisRestants ? moisAnnee(fin) : 'atteinte'}${p.c.estime ? ` · estimé depuis le ${dateFr(p.dateReleve)}` : ''}</div></div>
             <div class="montant neg">${f(p.c.capitalRestant, p.devise)}<small>restant dû</small></div>
           </div>`;
         }).join('') : `<div class="vide">${icones.credit}<p>Aucun crédit. Un prêt en francs suisses se saisit comme un prêt en euros.</p></div>`}

@@ -3,6 +3,7 @@ import { themeGraphiques, detruireGraphiques, rafraichirGraphiques, toast, $, $$
 import { icones, logo } from './js/icones.js';
 import { change, configure } from './js/marche.js';
 import { nombre, dateHeure } from './js/format.js';
+import { initLangue, changerLangue, LANGUE, LANGUES, NOMS_LANGUES } from './js/i18n.js';
 
 import * as accueil from './vues/accueil.js';
 import * as patrimoine from './vues/patrimoine.js';
@@ -16,6 +17,12 @@ const vue = $('#vue');
 let courante = { nom: null, module: null };
 
 themeGraphiques();
+await initLangue();
+
+// Choix de la langue (détectée d'après le navigateur, mémorisée une fois choisie).
+const choixLangue = $('#langue');
+choixLangue.innerHTML = Object.entries(LANGUES).map(([c, l]) => `<option value="${c}" title="${NOMS_LANGUES[c]}"${c === LANGUE ? ' selected' : ''}>${l}</option>`).join('');
+choixLangue.addEventListener('change', (e) => changerLangue(e.target.value));
 
 /* ------------------------------------------------------------ en-tête */
 

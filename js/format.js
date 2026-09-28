@@ -1,12 +1,18 @@
+import { LANGUE, LOCALE } from './i18n.js';
+
 const cache = {};
 const nf = (opts) => {
   const k = JSON.stringify(opts);
-  return cache[k] || (cache[k] = new Intl.NumberFormat('fr-FR', opts));
+  return cache[k] || (cache[k] = new Intl.NumberFormat(LOCALE, opts));
 };
 
 // Montant dans une devise donnée, arrondi à l'unité.
+// Français : format monétaire natif (1 234 €). Autres langues : nombre local suivi du symbole (1,234 € / 1’234 €).
+const SYMBOLES = { EUR: '€', CHF: 'CHF', USD: '$' };
 export const money = (v, devise = 'EUR', dec = 0) =>
-  nf({ style: 'currency', currency: devise, maximumFractionDigits: dec, minimumFractionDigits: dec }).format(+v || 0);
+  LANGUE === 'fr'
+    ? nf({ style: 'currency', currency: devise, maximumFractionDigits: dec, minimumFractionDigits: dec }).format(+v || 0)
+    : nf({ maximumFractionDigits: dec, minimumFractionDigits: dec }).format(+v || 0) + '\u00a0' + (SYMBOLES[devise] || devise);
 
 // Montant compact pour les axes : 12 k, 1,2 M.
 export const compact = (v) => {
@@ -19,9 +25,11 @@ export const compact = (v) => {
 export const nombre = (v, dec = 0) => nf({ maximumFractionDigits: dec, minimumFractionDigits: 0 }).format(+v || 0);
 export const pct = (v, dec = 2) => nf({ style: 'percent', minimumFractionDigits: dec, maximumFractionDigits: dec }).format(+v || 0);
 export const pctSigne = (v, dec = 1) => (v > 0 ? '+' : v < 0 ? '−' : '') + pct(Math.abs(v), dec);
-export const dateFr = (d) => (d ? new Date(d).toLocaleDateString('fr-FR') : '—');
-export const dateHeure = (d) =>
-  d ? new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+// Dates au format jj/mm/aaaa dans toutes les langues (lisible partout, et stable pour la traduction).
+const d2 = (n) => String(n).padStart(2, '0');
+export const dateFr = (d) => { if (!d) return '—'; const x = new Date(d); return `${d2(x.getDate())}/${d2(x.getMonth() + 1)}/${x.getFullYear()}`; };
+export const dateHeure = (d) => { if (!d) return '—'; const x = new Date(d); return `${d2(x.getDate())}/${d2(x.getMonth() + 1)} ${d2(x.getHours())}:${d2(x.getMinutes())}`; };
+export const moisAnnee = (d) => { const x = new Date(d); return `${d2(x.getMonth() + 1)}/${x.getFullYear()}`; };
 
 // Devises gérées. Conversion par l'euro : taux = CHF pour 1 EUR, tauxUSD = USD pour 1 EUR.
 export const DEVISES = ['EUR', 'CHF', 'USD'];

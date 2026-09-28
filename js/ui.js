@@ -1,3 +1,4 @@
+import { traduireGraphique, pluginTraduction } from './i18n.js';
 import { esc, compact, COULEURS } from './format.js';
 
 export const $ = (s, r = document) => r.querySelector(s);
@@ -10,6 +11,7 @@ const graphiques = new Set();
 
 export function themeGraphiques() {
   const C = window.Chart;
+  C.register(pluginTraduction);
   C.defaults.font.family = "'Jakarta', system-ui, sans-serif";
   C.defaults.font.size = 12;
   C.defaults.color = '#64748b';
@@ -31,7 +33,7 @@ export function themeGraphiques() {
 }
 
 export function graphique(canvas, config) {
-  const g = new window.Chart(canvas.getContext('2d'), config);
+  const g = new window.Chart(canvas.getContext('2d'), traduireGraphique(config));
   graphiques.add(g);
   // Filet de sécurité : si le graphique naît pendant une transition de page ou dans un
   // conteneur pas encore dimensionné, il est redessiné une fois l'affichage stabilisé.
