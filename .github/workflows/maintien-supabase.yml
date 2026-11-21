@@ -7,10 +7,21 @@ on:
     - cron: '17 6 * * *'   # tous les jours vers 8 h (heure de Genève en été)
   workflow_dispatch:       # bouton « Run workflow » pour tester à la main
 
+permissions:
+  actions: write   # nécessaire pour réactiver la tâche elle-même (étape ci-dessous)
+
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
+      # GitHub coupe les tâches planifiées après 60 jours sans modification du dépôt.
+      # Réactiver la tâche à chaque passage remet ce compteur à zéro, sans faux commit.
+      - name: Garder la tâche active
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/maintien-supabase.yml/enable"
+
       - name: Appel de la fonction cotations
         run: |
           curl -fsS --retry 3 --retry-delay 20 -X POST \
